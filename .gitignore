@@ -1,0 +1,29 @@
+# MATLAB/Simulink generated artifacts
+slprj/
+**/slprj/
+codegen/
+**/codegen/
+*_rtw/
+**/*_rtw/
+*_ert_rtw/
+**/*_ert_rtw/
+*_grt_rtw/
+**/*_grt_rtw/
+*.slxc
+*.slxc.lock
+*.asv
+*.m~
+*.slx.autosave
+*.mdl.autosave
+*.sldd.autosave
+data/*.sldd
+
+# Local simulation and test outputs
+results/
+**/results/
+test-results/
+**/test-results/
+
+# OS/editor noise
+.DS_Store
+._*

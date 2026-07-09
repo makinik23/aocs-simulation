@@ -1,0 +1,51 @@
+{
+  "schema": "AocsSimulationConfig/v1",
+  "mission": {
+    "name": "torque_free_rigid_body",
+    "description": "CubeSat rigid-body attitude dynamics scenario"
+  },
+  "models": {
+    "plant": "aocs_attitude_plant",
+    "directory": "models"
+  },
+  "results": {
+    "directory": "results",
+    "file": "aocs_simulation_results.mat"
+  },
+  "simulation": {
+    "start_time_s": 0.0,
+    "stop_time_s": 200.0,
+    "sample_time_s": 0.1,
+    "solver": "ode45",
+    "relative_tolerance": 1.0e-9,
+    "absolute_tolerance": 1.0e-10
+  },
+  "spacecraft": {
+    "id": "cubesat_3u",
+    "mass_properties": {
+      "inertia_B_kg_m2": [
+        [0.02, 0.0, 0.0],
+        [0.0, 0.025, 0.0],
+        [0.0, 0.0, 0.035]
+      ]
+    }
+  },
+  "initial_conditions": {
+    "q_BI": [1.0, 0.0, 0.0, 0.0],
+    "omega_BI_B_rad_s": [0.2, 0.1, 1.5]
+  },
+  "environment": {
+    "external_torque_B_Nm": [0.0, 0.0, 0.0]
+  },
+  "numerics": {
+    "quat_norm_epsilon": 1.0e-12,
+    "max_allowed_energy_drift": 1.0e-8,
+    "max_allowed_Hnorm_drift": 1.0e-8
+  },
+  "conventions": {
+    "quaternion_order": "scalar-first: q = [q0 q1 q2 q3]'",
+    "q_BI": "attitude quaternion mapping inertial frame I to body frame B",
+    "C_BI": "direction cosine matrix mapping v_I to v_B",
+    "omega_BI_B": "angular velocity of body B wrt inertial I, expressed in body frame B"
+  }
+}
