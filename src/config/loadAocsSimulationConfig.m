@@ -2,7 +2,8 @@ function AOCS = loadAocsSimulationConfig(configFile, projectRoot)
 % Description:
 %   Reads the JSON source of truth, validates required fields, normalizes the
 %   initial quaternion, derives Aerospace Blockset Euler initial conditions,
-%   and builds resolved paths for the model and results.
+%   validates orbit/epoch inputs, and builds resolved paths for the model and
+%   results.
 %
 % Arguments:
 %   configFile - Optional path to an AocsSimulationConfig JSON file.
@@ -26,7 +27,7 @@ end
 
 raw = jsondecode(fileread(configFile));
 
-schema = string(requireField(raw, "schema", "schema"));
+schema = stringScalarField(raw, "schema", "schema");
 if schema ~= "AocsSimulationConfig/v1"
     error("AOCS:Config:UnsupportedSchema", ...
         "Unsupported AOCS config schema '%s'. Expected 'AocsSimulationConfig/v1'.", char(schema));
@@ -36,12 +37,43 @@ mission = requireStruct(raw, "mission", "mission");
 models = requireStruct(raw, "models", "models");
 results = requireStruct(raw, "results", "results");
 sim = requireStruct(raw, "simulation", "simulation");
+epoch = requireStruct(raw, "epoch", "epoch");
+orbit = requireStruct(raw, "orbit", "orbit");
+propagator = requireStruct(orbit, "propagator", "orbit.propagator");
+initialKeplerian = requireStruct(orbit, "initial_keplerian", "orbit.initial_keplerian");
 spacecraft = requireStruct(raw, "spacecraft", "spacecraft");
 massProps = requireStruct(spacecraft, "mass_properties", "spacecraft.mass_properties");
 initial = requireStruct(raw, "initial_conditions", "initial_conditions");
 environment = requireStruct(raw, "environment", "environment");
+sun = requireStruct(environment, "sun", "environment.sun");
 numerics = requireStruct(raw, "numerics", "numerics");
 conventions = requireStruct(raw, "conventions", "conventions");
+
+epochUtc = columnField(epoch, "utc", "epoch.utc", 6);
+validateUtcEpoch(epochUtc, "epoch.utc");
+timeSystem = stringScalarField(epoch, "time_system", "epoch.time_system");
+if timeSystem ~= "UTC"
+    error("AOCS:Config:UnsupportedTimeSystem", ...
+        "Unsupported epoch.time_system '%s'. Expected 'UTC'.", char(timeSystem));
+end
+
+centralBody = stringScalarField(orbit, "central_body", "orbit.central_body");
+centralBodyConstants = centralBodyConstantsFor(centralBody);
+
+propagatorType = stringScalarField(propagator, "type", "orbit.propagator.type");
+if propagatorType ~= "kepler_unperturbed"
+    error("AOCS:Config:UnsupportedOrbitPropagator", ...
+        "Unsupported orbit.propagator.type '%s'. Expected 'kepler_unperturbed'.", char(propagatorType));
+end
+
+outputFrame = stringScalarField(propagator, "output_frame", "orbit.propagator.output_frame");
+if outputFrame ~= "ICRF"
+    error("AOCS:Config:UnsupportedOrbitFrame", ...
+        "Unsupported orbit.propagator.output_frame '%s'. Expected 'ICRF'.", char(outputFrame));
+end
+
+keplerian = readKeplerianElements(initialKeplerian);
+validateOrbitGeometry(keplerian, centralBodyConstants.radius_m);
 
 I_B = matrixField(massProps, "inertia_B_kg_m2", "spacecraft.mass_properties.inertia_B_kg_m2", 3, 3);
 if any(any(abs(I_B - I_B.') > 1e-12))
@@ -62,6 +94,17 @@ q_BI = q_BI ./ qNorm;
 euler_BI_0_rad = optionalColumnField(initial, "euler_BI_0_rad", "initial_conditions.euler_BI_0_rad", 3, quaternionToEuler321(q_BI));
 omega_BI_B = columnField(initial, "omega_BI_B_rad_s", "initial_conditions.omega_BI_B_rad_s", 3);
 M_ext_B = columnField(environment, "external_torque_B_Nm", "environment.external_torque_B_Nm", 3);
+m_res_B = columnField(environment, "residual_magnetic_dipole_B_A_m2", ...
+    "environment.residual_magnetic_dipole_B_A_m2", 3);
+sunModel = stringScalarField(sun, "model", "environment.sun.model");
+supportedSunModels = ["low_precision_analytic", "planet_ephemeris"];
+if ~any(sunModel == supportedSunModels)
+    error("AOCS:Config:UnsupportedSunModel", ...
+        "Unsupported environment.sun.model '%s'. Expected one of: %s.", ...
+        char(sunModel), strjoin(supportedSunModels, ", "));
+end
+solarConstant_W_m2 = scalarField(sun, "solar_constant_W_m2", ...
+    "environment.sun.solar_constant_W_m2", true);
 
 AOCS = struct();
 AOCS.Meta.Schema = schema;
@@ -88,6 +131,15 @@ if AOCS.Sim.StopTime_s <= AOCS.Sim.StartTime_s
     error("AOCS:Config:InvalidTimeSpan", "simulation.stop_time_s must be greater than simulation.start_time_s.");
 end
 
+AOCS.Epoch.Utc = epochUtc;
+AOCS.Epoch.TimeSystem = timeSystem;
+
+AOCS.Orbit.CentralBody = centralBody;
+AOCS.Orbit.Propagator.Type = propagatorType;
+AOCS.Orbit.Propagator.OutputFrame = outputFrame;
+AOCS.Orbit.CentralBodyConstants = centralBodyConstants;
+AOCS.Orbit.InitialKeplerian = keplerian;
+
 AOCS.Spacecraft.Id = string(requireField(spacecraft, "id", "spacecraft.id"));
 AOCS.Spacecraft.I_B = I_B;
 
@@ -96,6 +148,9 @@ AOCS.Initial.euler_BI_0_rad = euler_BI_0_rad;
 AOCS.Initial.omega_BI_B = omega_BI_B;
 
 AOCS.Environment.M_ext_B = M_ext_B;
+AOCS.Environment.m_res_B = m_res_B;
+AOCS.Environment.Sun.Model = sunModel;
+AOCS.Environment.Sun.SolarConstant_W_m2 = solarConstant_W_m2;
 
 AOCS.Numerics.QuatNormEpsilon = scalarField(numerics, "quat_norm_epsilon", "numerics.quat_norm_epsilon", true);
 AOCS.Numerics.MaxAllowedEnergyDrift = scalarField(numerics, "max_allowed_energy_drift", "numerics.max_allowed_energy_drift", true);
@@ -107,6 +162,8 @@ AOCS.Convention.C_BI = string(requireField(conventions, "C_BI", "conventions.C_B
 AOCS.Convention.omega_BI_B = string(requireField(conventions, "omega_BI_B", "conventions.omega_BI_B"));
 
 AOCS.Config = buildBusConfig(AOCS);
+AOCS.OrbitConfig = buildOrbitBusConfig(AOCS);
+AOCS.EnvironmentConfig = buildEnvironmentBusConfig(AOCS);
 AOCS.Raw = raw;
 end
 
@@ -125,6 +182,48 @@ config.I_B = AOCS.Spacecraft.I_B;
 config.euler_BI_0_rad = AOCS.Initial.euler_BI_0_rad;
 config.omega_BI_B_0 = AOCS.Initial.omega_BI_B;
 config.M_ext_B = AOCS.Environment.M_ext_B;
+end
+
+function config = buildOrbitBusConfig(AOCS)
+% Description:
+%   Selects only numeric orbit values intended for Simulink block masks and
+%   orbit/environment subsystems.
+%
+% Arguments:
+%   AOCS - Validated AOCS configuration struct.
+%
+% Outputs:
+%   config - Struct matching createAocsOrbitConfigBus element names.
+
+keplerian = AOCS.Orbit.InitialKeplerian;
+
+config = struct();
+config.epoch_utc = AOCS.Epoch.Utc;
+config.mu_m3_s2 = AOCS.Orbit.CentralBodyConstants.mu_m3_s2;
+config.central_body_radius_m = AOCS.Orbit.CentralBodyConstants.radius_m;
+config.semi_major_axis_m = keplerian.semi_major_axis_m;
+config.eccentricity = keplerian.eccentricity;
+config.inclination_rad = keplerian.inclination_rad;
+config.raan_rad = keplerian.raan_rad;
+config.argument_of_periapsis_rad = keplerian.argument_of_periapsis_rad;
+config.true_anomaly_rad = keplerian.true_anomaly_rad;
+end
+
+function config = buildEnvironmentBusConfig(AOCS)
+% Description:
+%   Selects numeric environment/disturbance values for orbit/environment
+%   subsystems while keeping the current plant-facing config intact.
+%
+% Arguments:
+%   AOCS - Validated AOCS configuration struct.
+%
+% Outputs:
+%   config - Struct matching createAocsEnvironmentConfigBus element names.
+
+config = struct();
+config.M_ext_B = AOCS.Environment.M_ext_B;
+config.m_res_B_A_m2 = AOCS.Environment.m_res_B;
+config.solar_constant_W_m2 = AOCS.Environment.Sun.SolarConstant_W_m2;
 end
 
 function section = requireStruct(parent, fieldName, displayName)
@@ -184,6 +283,29 @@ else
 end
 end
 
+function value = stringScalarField(parent, fieldName, displayName)
+% Description:
+%   Reads a required JSON string and enforces scalar, non-empty shape.
+%
+% Arguments:
+%   parent - Struct containing the requested field.
+%   fieldName - Field name to read.
+%   displayName - Human-readable field path for error messages.
+%
+% Outputs:
+%   value - Scalar string value.
+
+rawValue = requireField(parent, fieldName, displayName);
+if ~(ischar(rawValue) || (isstring(rawValue) && isscalar(rawValue)))
+    error("AOCS:Config:InvalidField", "Config field %s must be a scalar string.", displayName);
+end
+
+value = string(rawValue);
+if strlength(value) == 0
+    error("AOCS:Config:InvalidField", "Config field %s must be non-empty.", displayName);
+end
+end
+
 function value = scalarField(parent, fieldName, displayName, mustBePositive)
 % Description:
 %   Converts JSON numeric values to double and enforces scalar shape plus
@@ -203,6 +325,160 @@ validateattributes(value, {'numeric'}, {'real', 'finite', 'scalar'}, mfilename, 
 if mustBePositive && value <= 0
     error("AOCS:Config:InvalidField", "Config field %s must be positive.", displayName);
 end
+end
+
+function constants = centralBodyConstantsFor(centralBody)
+% Description:
+%   Resolves central-body constants used by orbit propagation and
+%   environment products.
+%
+% Arguments:
+%   centralBody - Name from orbit.central_body.
+%
+% Outputs:
+%   constants - Struct with numeric constants for supported bodies.
+
+if centralBody ~= "Earth"
+    error("AOCS:Config:UnsupportedCentralBody", ...
+        "Unsupported orbit.central_body '%s'. Expected 'Earth'.", char(centralBody));
+end
+
+constants = struct();
+constants.mu_m3_s2 = 3.986004418e14;
+constants.radius_m = 6378137.0;
+end
+
+function keplerian = readKeplerianElements(initialKeplerian)
+% Description:
+%   Validates classical Keplerian elements for an elliptical Earth orbit.
+%
+% Arguments:
+%   initialKeplerian - JSON object from orbit.initial_keplerian.
+%
+% Outputs:
+%   keplerian - Struct containing finite SI/radian Keplerian elements.
+
+keplerian = struct();
+keplerian.semi_major_axis_m = scalarField(initialKeplerian, ...
+    "semi_major_axis_m", "orbit.initial_keplerian.semi_major_axis_m", true);
+keplerian.eccentricity = scalarField(initialKeplerian, ...
+    "eccentricity", "orbit.initial_keplerian.eccentricity", false);
+keplerian.inclination_rad = scalarField(initialKeplerian, ...
+    "inclination_rad", "orbit.initial_keplerian.inclination_rad", false);
+keplerian.raan_rad = scalarField(initialKeplerian, ...
+    "raan_rad", "orbit.initial_keplerian.raan_rad", false);
+keplerian.argument_of_periapsis_rad = scalarField(initialKeplerian, ...
+    "argument_of_periapsis_rad", "orbit.initial_keplerian.argument_of_periapsis_rad", false);
+keplerian.true_anomaly_rad = scalarField(initialKeplerian, ...
+    "true_anomaly_rad", "orbit.initial_keplerian.true_anomaly_rad", false);
+
+if keplerian.eccentricity < 0 || keplerian.eccentricity >= 1
+    error("AOCS:Config:InvalidKeplerianElements", ...
+        "orbit.initial_keplerian.eccentricity must satisfy 0 <= e < 1 for the initial elliptical propagator.");
+end
+
+if keplerian.inclination_rad < 0 || keplerian.inclination_rad > pi
+    error("AOCS:Config:InvalidKeplerianElements", ...
+        "orbit.initial_keplerian.inclination_rad must satisfy 0 <= i <= pi.");
+end
+end
+
+function validateOrbitGeometry(keplerian, centralBodyRadius_m)
+% Description:
+%   Checks that the configured initial ellipse is above the central body.
+%
+% Arguments:
+%   keplerian - Validated Keplerian element struct.
+%   centralBodyRadius_m - Central-body reference radius [m].
+%
+% Outputs:
+%   None.
+
+periapsisRadius_m = keplerian.semi_major_axis_m * (1 - keplerian.eccentricity);
+if periapsisRadius_m <= centralBodyRadius_m
+    error("AOCS:Config:InvalidKeplerianElements", ...
+        "orbit.initial_keplerian gives a periapsis radius below the central-body radius.");
+end
+end
+
+function validateUtcEpoch(epochUtc, displayName)
+% Description:
+%   Validates a UTC epoch vector [year month day hour minute second]'.
+%
+% Arguments:
+%   epochUtc - 6-by-1 epoch vector.
+%   displayName - Human-readable field path for error messages.
+%
+% Outputs:
+%   None.
+
+integerParts = epochUtc(1:5);
+if any(abs(integerParts - round(integerParts)) > 0)
+    error("AOCS:Config:InvalidEpoch", "Config field %s must use integer year/month/day/hour/minute values.", displayName);
+end
+
+year = epochUtc(1);
+month = epochUtc(2);
+day = epochUtc(3);
+hour = epochUtc(4);
+minute = epochUtc(5);
+second = epochUtc(6);
+
+if year < 1
+    error("AOCS:Config:InvalidEpoch", "Config field %s has invalid year.", displayName);
+end
+
+if month < 1 || month > 12
+    error("AOCS:Config:InvalidEpoch", "Config field %s has invalid month.", displayName);
+end
+
+maxDay = daysInMonth(year, month);
+if day < 1 || day > maxDay
+    error("AOCS:Config:InvalidEpoch", "Config field %s has invalid day for the given month/year.", displayName);
+end
+
+if hour < 0 || hour > 23
+    error("AOCS:Config:InvalidEpoch", "Config field %s has invalid hour.", displayName);
+end
+
+if minute < 0 || minute > 59
+    error("AOCS:Config:InvalidEpoch", "Config field %s has invalid minute.", displayName);
+end
+
+if second < 0 || second >= 60
+    error("AOCS:Config:InvalidEpoch", "Config field %s has invalid second.", displayName);
+end
+end
+
+function dayCount = daysInMonth(year, month)
+% Description:
+%   Returns Gregorian month length without requiring toolbox helpers.
+%
+% Arguments:
+%   year - Integer year.
+%   month - Integer month number.
+%
+% Outputs:
+%   dayCount - Number of days in the requested month.
+
+monthLengths = [31 28 31 30 31 30 31 31 30 31 30 31];
+dayCount = monthLengths(month);
+if month == 2 && isLeapYear(year)
+    dayCount = 29;
+end
+end
+
+function result = isLeapYear(year)
+% Description:
+%   Evaluates Gregorian leap-year rules.
+%
+% Arguments:
+%   year - Integer year.
+%
+% Outputs:
+%   result - True for leap years.
+
+result = (mod(year, 4) == 0 && mod(year, 100) ~= 0) || mod(year, 400) == 0;
 end
 
 function value = columnField(parent, fieldName, displayName, rows)

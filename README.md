@@ -1,78 +1,170 @@
 # CubeSat AOCS Simulator
 
-Small Attitude and Orbit Control System simulation developed in MATLAB and Simulink.
+MATLAB/Simulink simulator for CubeSat Attitude and Orbit Control System.
 
-## Workflow
+The current model includes:
 
-Run from MATLAB:
+- rigid-body attitude dynamics with quaternion kinematics,
+- Keplerian orbit propagation,
+- Frame transformations,
+- IGRF-14 magnetic field model,
+- residual magnetic moment and gravity-gradient disturbance torques,
+- validation tests and diagnostic plotting utilities.
+
+## Quick Start
+
+Run the default simulation from MATLAB:
 
 ```matlab
 run_aocs_simulation
-validate_aocs_results
-plot_aocs_results
 ```
 
-Run the attitude dynamics regression tests with:
+Validate the latest result:
 
 ```matlab
-results = runtests("tests/attitude_dynamics")
+validate_aocs_results
 ```
 
-`run_aocs_simulation` loads the JSON configuration, creates the Simulink bus objects, configures the Aerospace Blockset `6DOF (Quaternion)` block, runs the plant model, and saves the latest result to `results/aocs_simulation_results.mat`.
+Plot attitude dynamics:
 
-## Architecture
+```matlab
+plot_attitude_results
+```
 
-The source of truth is `config/AocsSimulationConfig.json`.
+Plot orbit and environment products:
 
-The Simulink plant is `models/aocs_attitude_plant.slx`.
+```matlab
+plot_orbit_environment_results
+```
 
-The current attitude model contract is:
+Export orbit/environment figures to PNG:
 
-- `AOCS_ConfigBus`: one flat configuration bus generated from JSON
-- `AOCS_Config`: `Simulink.Parameter` containing that bus payload
-- `AOCS_StateBus`: one logged attitude state bus from the plant
+```matlab
+plot_orbit_environment_results("", "results/orbit_plots")
+```
 
-The plant uses Aerospace Blockset `6DOF (Quaternion)` for rigid-body attitude and quaternion dynamics.
-
-`AOCS_StateBus` contains:
+The default result is saved to:
 
 ```text
-euler_rad
-q_be
-DCM_be
-omega_b
+results/aocs_simulation_results.mat
 ```
 
-The JSON stores the initial attitude as scalar-first quaternion `q_BI`. The loader derives `euler_BI_0_rad` for the Aerospace Blockset mask because the `6DOF (Quaternion)` block expects initial `[roll pitch yaw]`.
+## Configuration
 
-For a Simulink Constant block that emits the whole config bus:
+The source of truth is:
 
 ```text
-Constant value: AOCS_Config
-Output data type: Bus: AOCS_ConfigBus
-Sample time: inf
+config/AocsSimulationConfig.json
 ```
 
-Inside Simulink block parameters, access fields as `AOCS_Config.I_B`, not `AOCS_Config.Value.I_B`.
+It defines the simulation time span, solver settings, UTC epoch, initial
+Keplerian orbit, spacecraft inertia, initial attitude/rates, and environment
+parameters. The loader validates this file and creates the normalized `AOCS`
+struct used by Simulink setup and analysis:
 
-## Attitude Baseline
+```text
+src/config/loadAocsSimulationConfig.m
+```
 
-- Aerospace Blockset 6DOF quaternion plant
-- Config-driven inertia, initial attitude, initial body rates, and external torque
-- Typed config and state buses
-- Torque-free motion
-- Quaternion, Euler angle, DCM, and body-rate logging
-- Rotational energy validation
-- Angular momentum norm validation
-- Regression tests for spherical inertia, principal-axis spin, intermediate-axis instability, and coning
+## Simulink Setup
 
-## Next milestones
+The setup entrypoint is:
 
-- Orbit propagation
-- IGRF
-- Sun ephemeris
-- Sensor models
-- TRIAD
-- MEKF
-- Reaction Wheels
-- B-dot controller
+```matlab
+AOCS = setupAocsSimulation("config/AocsSimulationConfig.json");
+```
+
+`setupAocsSimulation` creates the bus objects and `Simulink.Parameter` payloads
+in the MATLAB base workspace.
+
+`applyAocsSimulationSettings` then configures the Aerospace Blockset blocks
+from the validated config, including the 6DOF plant, Kepler propagator,
+ECI/LLA conversion, ECI/ECEF DCM, and IGRF.
+
+## Model Architecture
+
+The Simulink plant is:
+
+```text
+models/aocs_plant.slx
+```
+
+Top-level structure:
+
+```text
+AOCS Simulation
+├── Config constants
+├── Attitude Dynamics
+│   └── AOCS_StateBus
+├── Orbit & Environment
+│   ├── OrbitState
+│   └── EnvironmentBus
+└── Torque Sum
+```
+
+## Documentation
+
+Detailed project documentation in `docs/`:
+
+- [Frame transformations and conventions](docs/transformations.md)
+
+## Tests
+
+Run attitude-dynamics regression tests:
+
+```matlab
+results = runtests("tests/attitude_dynamics");
+```
+
+Run orbit and environment regression tests:
+
+```matlab
+results = runtests("tests/orbit_and_environment");
+```
+
+Convenience wrappers:
+
+```matlab
+run_attitude_dynamics_tests
+run_orbit_and_environment_tests
+```
+
+## Repository Layout
+
+```text
+config/
+  AocsSimulationConfig.json
+docs/
+  transformations.md
+models/
+  aocs_plant.slx
+src/
+  analysis/
+  config/
+  environment/
+  simulink/
+tests/
+  attitude_dynamics/
+  orbit_and_environment/
+run_aocs_simulation.m
+validate_aocs_results.m
+plot_attitude_results.m
+plot_orbit_environment_results.m
+plot_aocs_results.m
+startup.m
+```
+
+## Current Limitations
+
+The current Orbit & Environment stage intentionally does not yet include:
+
+- Sun products wired into `AOCS_EnvironmentBus`,
+- eclipse state,
+- solar radiation pressure,
+- aerodynamic drag torque,
+- sensor models,
+- actuators,
+- estimation or control algorithms.
+
+Recommended next order: Sun products, eclipse, SRP/aero torques, sensor models,
+TRIAD/MEKF, then actuators and control.

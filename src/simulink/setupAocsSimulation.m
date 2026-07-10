@@ -1,8 +1,8 @@
 function AOCS = setupAocsSimulation(configFile)
 % Description:
-%   Creates AOCS_ConfigBus and AOCS_StateBus in the base workspace, wraps the
-%   numeric plant config in a Simulink.Parameter, and assigns AOCS plus
-%   AOCS_Config for model evaluation.
+%   Creates AOCS bus objects in the base workspace, wraps numeric config
+%   payloads in Simulink.Parameters, and assigns AOCS plus config parameters
+%   for model evaluation.
 %
 % Arguments:
 %   configFile - Optional path to an AocsSimulationConfig JSON file.
@@ -17,16 +17,33 @@ end
 
 addpath(fullfile(projectRoot, "src", "config"));
 addpath(fullfile(projectRoot, "src", "simulink"));
+addpath(fullfile(projectRoot, "src", "environment"));
 
 AOCS = loadAocsSimulationConfig(configFile, projectRoot);
 createAocsConfigBus("base");
+createAocsOrbitConfigBus("base");
+createAocsEnvironmentConfigBus("base");
 createAocsStateBus("base");
+createAocsOrbitStateBus("base");
+createAocsEnvironmentBus("base");
 
 AOCS_Config = Simulink.Parameter(AOCS.Config);
 AOCS_Config.DataType = "Bus: AOCS_ConfigBus";
 AOCS_Config.CoderInfo.StorageClass = "Auto";
 AOCS_Config.Description = "AOCS plant configuration loaded from JSON";
 
+AOCS_OrbitConfig = Simulink.Parameter(AOCS.OrbitConfig);
+AOCS_OrbitConfig.DataType = "Bus: AOCS_OrbitConfigBus";
+AOCS_OrbitConfig.CoderInfo.StorageClass = "Auto";
+AOCS_OrbitConfig.Description = "AOCS orbit configuration loaded from JSON";
+
+AOCS_EnvironmentConfig = Simulink.Parameter(AOCS.EnvironmentConfig);
+AOCS_EnvironmentConfig.DataType = "Bus: AOCS_EnvironmentConfigBus";
+AOCS_EnvironmentConfig.CoderInfo.StorageClass = "Auto";
+AOCS_EnvironmentConfig.Description = "AOCS environment configuration loaded from JSON";
+
 assignin("base", "AOCS", AOCS);
 assignin("base", "AOCS_Config", AOCS_Config);
+assignin("base", "AOCS_OrbitConfig", AOCS_OrbitConfig);
+assignin("base", "AOCS_EnvironmentConfig", AOCS_EnvironmentConfig);
 end

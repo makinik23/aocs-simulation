@@ -46,8 +46,8 @@ classdef AttitudeDynamicsTest < matlab.unittest.TestCase
             %   None.
 
             closeModelIfLoaded(testCase.ModelName);
-            deleteIfPresent(fullfile(testCase.ProjectRoot, "aocs_attitude_plant.slxc"));
-            deleteIfPresent(fullfile(testCase.ProjectRoot, "tests", "attitude_dynamics", "aocs_attitude_plant.slxc"));
+            deleteIfPresent(fullfile(testCase.ProjectRoot, testCase.ModelName + ".slxc"));
+            deleteIfPresent(fullfile(testCase.ProjectRoot, "tests", "attitude_dynamics", testCase.ModelName + ".slxc"));
             deleteIfPresent(fullfile(testCase.ProjectRoot, "slprj"));
             deleteIfPresent(fullfile(testCase.ProjectRoot, "tests", "attitude_dynamics", "slprj"));
             deleteIfPresent(fullfile(testCase.ProjectRoot, "results"));
@@ -212,6 +212,7 @@ classdef AttitudeDynamicsTest < matlab.unittest.TestCase
 
             configFile = testCase.writeScenarioConfig(scenarioName, inertia_B, omega0_B, stopTime_s);
             AOCS = setupAocsSimulation(configFile);
+            disableEnvironmentDisturbancesForTorqueFreeTest();
 
             load_system(AOCS.Model.File);
             applyAocsSimulationSettings(AOCS.Model.Name, AOCS);
@@ -221,6 +222,7 @@ classdef AttitudeDynamicsTest < matlab.unittest.TestCase
             omega = loggedSignalMatrix(state.omega_b.Data, 3, "omega_b");
             q = loggedSignalMatrix(state.q_be.Data, 4, "q_be");
             invariants = computeAocsInvariants(omega, inertia_B);
+            maxDisturbanceTorque = maxLoggedDisturbanceTorque(out);
 
             result = struct();
             result.Name = scenarioName;
@@ -230,6 +232,7 @@ classdef AttitudeDynamicsTest < matlab.unittest.TestCase
             result.Omega = omega;
             result.Quaternion = q;
             result.Invariants = invariants;
+            result.MaxDisturbanceTorque = maxDisturbanceTorque;
         end
 
         function configFile = writeScenarioConfig(testCase, scenarioName, inertia_B, omega0_B, stopTime_s)
@@ -254,6 +257,7 @@ classdef AttitudeDynamicsTest < matlab.unittest.TestCase
             raw.initial_conditions.q_BI = [1 0 0 0];
             raw.initial_conditions.omega_BI_B_rad_s = omega0_B(:).';
             raw.environment.external_torque_B_Nm = [0 0 0];
+            raw.environment.residual_magnetic_dipole_B_A_m2 = [0 0 0];
             raw.results.directory = testCase.WorkFolder;
             raw.results.file = char(scenarioName + ".mat");
 
@@ -281,6 +285,9 @@ classdef AttitudeDynamicsTest < matlab.unittest.TestCase
 
             energy = result.Invariants.E_rot;
             momentum = result.Invariants.H_norm;
+
+            testCase.verifyLessThan(result.MaxDisturbanceTorque, 1e-14, ...
+                "Modeled disturbance torque is nonzero in torque-free scenario " + result.Name + ".");
 
             energyScale = max(abs(energy(1)), eps);
             momentumScale = max(abs(momentum(1)), eps);
@@ -342,6 +349,62 @@ function deviation = maxBodyRateDeviation(result)
 %   deviation - Maximum Euclidean deviation of omega from omega(1,:).
 
 deviation = max(vecnorm(result.Omega - result.Omega(1, :), 2, 2));
+end
+
+function disableEnvironmentDisturbancesForTorqueFreeTest()
+% Description:
+%   Zeros environment-driven torques in the base-workspace parameters while
+%   leaving the top-level model architecture intact.
+%
+% Arguments:
+%   None.
+%
+% Outputs:
+%   None.
+
+if evalin("base", "exist('AOCS_OrbitConfig', 'var')")
+    AOCS_OrbitConfig = evalin("base", "AOCS_OrbitConfig");
+    orbitConfig = AOCS_OrbitConfig.Value;
+    orbitConfig.mu_m3_s2 = 0;
+    AOCS_OrbitConfig.Value = orbitConfig;
+    assignin("base", "AOCS_OrbitConfig", AOCS_OrbitConfig);
+end
+
+if evalin("base", "exist('AOCS_EnvironmentConfig', 'var')")
+    AOCS_EnvironmentConfig = evalin("base", "AOCS_EnvironmentConfig");
+    environmentConfig = AOCS_EnvironmentConfig.Value;
+    environmentConfig.M_ext_B = zeros(3, 1);
+    environmentConfig.m_res_B_A_m2 = zeros(3, 1);
+    AOCS_EnvironmentConfig.Value = environmentConfig;
+    assignin("base", "AOCS_EnvironmentConfig", AOCS_EnvironmentConfig);
+end
+end
+
+function maxTorque = maxLoggedDisturbanceTorque(out)
+% Description:
+%   Returns the maximum logged modeled disturbance torque, or zero when the
+%   signal is absent.
+%
+% Arguments:
+%   out - Simulink.SimulationOutput from a test scenario.
+%
+% Outputs:
+%   maxTorque - Maximum disturbance torque norm [N*m].
+
+maxTorque = 0;
+
+try
+    element = out.logsout.getElement("M_dist_B_Nm");
+catch
+    element = [];
+end
+
+if isempty(element)
+    return;
+end
+
+torqueData = loggedSignalMatrix(element.Values.Data, 3, "M_dist_B_Nm");
+maxTorque = max(vecnorm(torqueData, 2, 2));
 end
 
 function closeModelIfLoaded(modelName)
