@@ -13,6 +13,7 @@ function out = run_aocs_simulation(configFile)
 projectRoot = fileparts(mfilename("fullpath"));
 addpath(fullfile(projectRoot, "src", "config"));
 addpath(fullfile(projectRoot, "src", "simulink"));
+addpath(fullfile(projectRoot, "src", "environment"));
 
 if nargin < 1 || strlength(string(configFile)) == 0
     configFile = fullfile(projectRoot, "config", "AocsSimulationConfig.json");

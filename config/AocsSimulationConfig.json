@@ -1,11 +1,11 @@
 {
   "schema": "AocsSimulationConfig/v1",
   "mission": {
-    "name": "torque_free_rigid_body",
-    "description": "CubeSat rigid-body attitude dynamics scenario"
+    "name": "leo_orbit_environment_disturbed_rigid_body",
+    "description": "CubeSat attitude dynamics with Kepler orbit, IGRF magnetic field, RMM, and gravity-gradient disturbance torques"
   },
   "models": {
-    "plant": "aocs_attitude_plant",
+    "plant": "aocs_plant",
     "directory": "models"
   },
   "results": {
@@ -19,6 +19,25 @@
     "solver": "ode45",
     "relative_tolerance": 1.0e-9,
     "absolute_tolerance": 1.0e-10
+  },
+  "epoch": {
+    "utc": [2026, 1, 1, 0, 0, 0],
+    "time_system": "UTC"
+  },
+  "orbit": {
+    "central_body": "Earth",
+    "propagator": {
+      "type": "kepler_unperturbed",
+      "output_frame": "ICRF"
+    },
+    "initial_keplerian": {
+      "semi_major_axis_m": 6871000.0,
+      "eccentricity": 0.001,
+      "inclination_rad": 1.710422666954443,
+      "raan_rad": 0.0,
+      "argument_of_periapsis_rad": 0.0,
+      "true_anomaly_rad": 0.0
+    }
   },
   "spacecraft": {
     "id": "cubesat_3u",
@@ -35,7 +54,12 @@
     "omega_BI_B_rad_s": [0.2, 0.1, 1.5]
   },
   "environment": {
-    "external_torque_B_Nm": [0.0, 0.0, 0.0]
+    "external_torque_B_Nm": [0.0, 0.0, 0.0],
+    "residual_magnetic_dipole_B_A_m2": [0.01, 0.0, 0.0],
+    "sun": {
+      "model": "low_precision_analytic",
+      "solar_constant_W_m2": 1361.0
+    }
   },
   "numerics": {
     "quat_norm_epsilon": 1.0e-12,
