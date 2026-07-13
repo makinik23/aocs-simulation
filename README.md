@@ -153,18 +153,3 @@ plot_orbit_environment_results.m
 plot_aocs_results.m
 startup.m
 ```
-
-## Current Limitations
-
-The current Orbit & Environment stage intentionally does not yet include:
-
-- Sun products wired into `AOCS_EnvironmentBus`,
-- eclipse state,
-- solar radiation pressure,
-- aerodynamic drag torque,
-- sensor models,
-- actuators,
-- estimation or control algorithms.
-
-Recommended next order: Sun products, eclipse, SRP/aero torques, sensor models,
-TRIAD/MEKF, then actuators and control.
