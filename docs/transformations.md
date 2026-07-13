@@ -1,14 +1,10 @@
 # Frame Transformations and Conventions
 
-This document defines the coordinate-frame and transformation conventions used
-by the AOCS Simulink model. The goal is a consistent engineering simulation
-chain for attitude dynamics, orbit products, magnetic-field products, and later
-Sun/eclipse/SRP products.
+This document defines the coordinate frames, time convention, signal naming, and transformation chain used by the AOCS Simulink model.
 
 ## Signal Suffixes
 
-Vector signal names use a suffix that states which frame the components are
-expressed in:
+Vector signal names include a suffix identifying the frame in which their components are expressed:
 
 ```text
 _I      inertial frame used by the orbit propagator
@@ -17,235 +13,235 @@ _NED    local north-east-down frame
 _B      spacecraft body frame
 ```
 
-For example, `B_I_T` is a magnetic-field vector expressed in inertial axes, and
-`B_B_T` is the same physical field expressed in body axes.
+For example, `B_I_T` and `B_B_T` describe the same physical magnetic field. The first signal contains its components in inertial axes, while the second contains its components in spacecraft body axes.
+
+Units are included in signal names where practical:
+
+```text
+_m       metres
+_m_s     metres per second
+_T       tesla
+_Nm      newton metres
+_A_m2    ampere square metres
+```
+
+All vectors are represented as column vectors.
 
 ## Time Model
 
-The JSON config defines the UTC epoch:
+The simulation begins at the UTC epoch defined in:
+
+```text
+config/AocsSimulationConfig.json
+```
+
+The epoch is stored as:
 
 ```text
 epoch.utc = [year month day hour minute second]
 ```
 
-Simulink `Clock` provides elapsed seconds from that epoch. Blocks that need an
-absolute date use:
+The Simulink `Clock` block provides elapsed simulation time in seconds. Blocks that require a calendar date combine the configured epoch with the elapsed time.
 
-```text
-UTC(t) = epoch.utc + Clock seconds
-```
+The function `applyAocsSimulationSettings` configures the Aerospace Blockset frame-conversion blocks with the same epoch and uses seconds as the time increment. This ensures that the orbit position, ECI-to-ECEF transformation, geodetic coordinates, IGRF date, and Sun model all refer to the same physical instant.
 
-`applyAocsSimulationSettings` configures both the `ECI Position to LLA` and
-`Direction Cosine Matrix ECI to ECEF` blocks with the same epoch and with
-`deltaT = Sec`. This keeps the orbit propagator, LLA conversion, ECI/ECEF DCM,
-IGRF decimal year, and future Sun/eclipse products on one time base.
 
 ## Inertial Frame `I`
 
-`I` is the geocentric inertial frame used by the Aerospace Blockset orbit and
-frame-conversion blocks. The orbit propagator is configured with:
+`I` is the Earth-centered inertial frame used by the Aerospace Blockset orbit-propagation and frame-conversion blocks.
 
-```text
-orbit.propagator.output_frame = ICRF
-```
+In Aerospace Blockset terminology, this inertial frame is referred to as ICRF (International Celestial Reference Frame.
+For an Earth-centered simulation, its origin is located at the Earth's center of mass, while its axes follow the International Celestial Reference Frame orientation.
+This reference frame is called GCRF (Geocentric Celestial Reference Frame). MATLAB states that this frame may be treated as the ECI frame realized at J2000 for the purposes of spacecraft modelling.
 
-Therefore `r_I_m`, `v_I_m_s`, and `B_I_T` are Earth-centered vectors expressed
-in ICRF-aligned inertial axes. In project shorthand this is the ECI frame, but
-it is not TEME and it is not a TLE/SGP4 frame.
-
-When this project says ECI, it means the ICRF/IAU-2000/2006 inertial frame used
-consistently by the MATLAB Aerospace Blockset blocks in this model.
-
-The current orbit model is Keplerian and unperturbed. Orbit dynamics are
-propagated in the inertial frame; Earth rotation only enters when converting
-between inertial, Earth-fixed, and local frames.
+The current orbit model uses unperturbed Keplerian propagation. The spacecraft position and velocity are propagated entirely in `I`. The model therefore includes central-body gravity but does not yet include effects such as Earth oblateness, atmospheric drag, solar-radiation pressure, or third-body gravity.
 
 ## IAU-2000/2006 Reduction
 
-The ECI-to-ECEF and ECI-to-LLA Aerospace Blockset blocks are configured with:
+The reduction defines how the inertial frame is related to the rotating terrestrial frame at a specified date and time.
+
+It accounts for the main effects required to describe Earth orientation, including precession, nutation, Earth rotation, and polar motion. These effects are conceptually different:
+
+- precession describes the long-term change of the Earth's rotation-axis orientation,
+- nutation describes smaller periodic changes superimposed on precession,
+- Earth rotation determines the daily orientation of the Earth,
+- polar motion describes the movement of the rotation pole relative to the terrestrial crust.
+
+The current model does not provide measured Earth-orientation parameters from an external IERS data source. In particular, it does not explicitly supply:
 
 ```text
-red = IAU-2000/2006
+deltaAT
+deltaUT1
+polar motion coordinates xp and yp
+celestial pole corrections dX and dY
 ```
 
-That reduction is the modern precession-nutation and Earth-orientation
-reduction path exposed by the Aerospace Blockset blocks. In this model it is
-used as a coherent simulation convention: the same epoch and elapsed seconds
-drive all inertial-to-Earth-fixed conversions.
-
-At this stage the model does not feed measured Earth-orientation parameters
-into those blocks. In particular, it does not provide external `dUT1`, polar
-motion (`xp`, `yp`), or celestial intermediate pole offsets (`dX`, `dY`). The
-intent is a consistent AOCS engineering frame chain, not sub-arcsecond orbit
-determination.
+This matter will be addressed in the future.
 
 ## Earth-Fixed Frame `ECEF`
 
-`ECEF` is an Earth-centered, Earth-fixed rotating frame tied to the WGS84 Earth
-model used by the geodetic conversions:
+`ECEF` is the Earth-centered Earth-fixed frame used for quantities tied to the rotating Earth.
 
-- origin at the Earth center,
-- `+Z` along the terrestrial reference pole,
-- `+X` through the equator and zero longitude,
-- `+Y` completes a right-handed frame,
-- components are in meters for position-like quantities.
+Its origin is at the Earth's center of mass. Its axes rotate with the Earth:
 
-The ECEF frame rotates with the Earth. It is used as the bridge between inertial
-orbit products and geodetic/local products such as LLA, NED, and IGRF magnetic
-field components.
+```text
++X   passes through the equator and zero longitude
++Y   passes through the equator and 90 degrees east longitude
++Z   points toward the north terrestrial pole
+```
+
+A point fixed on the Earth's surface has nearly constant ECEF coordinates, while its inertial coordinates change as the Earth rotates.
+
+In the MATLAB IAU-2000/2006 conversion path, the fixed frame corresponds to the terrestrial reference frame used by the Aerospace Toolbox and Aerospace Blockset implementation.
+
+The ECEF frame provides the bridge between orbital quantities and Earth-related environment models. It is used when converting the spacecraft position to geodetic coordinates and when transforming local magnetic-field components into inertial axes.
 
 ## Geodetic LLA
 
-LLA is geodetic latitude, longitude, and height above the WGS84 ellipsoid:
+The spacecraft location relative to the Earth is represented by geodetic latitude, longitude, and altitude:
 
 ```text
-latitude   [deg]
-longitude  [deg], east-positive
-altitude   [m]
+latitude    [deg]
+longitude   [deg], east-positive
+altitude    [m]
 ```
 
-LLA is produced from the inertial position `r_I_m` by the Aerospace Blockset
-`ECI Position to LLA` block using the same epoch/time convention as the ECI/ECEF
-DCM block.
+Geodetic latitude is defined relative to the normal of the reference ellipsoid. It therefore differs slightly from geocentric latitude except at the equator and poles.
+
+Longitude identifies rotation about the Earth-fixed `+Z` axis and is positive eastward.
+
+Altitude is measured along the ellipsoid normal above the WGS84 reference ellipsoid.
+
+The `ECI Position to LLA` block converts `r_I_m` directly to geodetic coordinates using the configured UTC epoch, elapsed time, reduction method, and WGS84 ellipsoid.
+
+These coordinates provide the location and date required by the IGRF magnetic-field model.
 
 ## Local NED Frame
 
-NED is the local tangent frame at the geodetic LLA point:
+`NED` is a local tangent frame attached to the spacecraft geodetic location:
 
 ```text
-N  local north
-E  local east
-D  local down, opposite local up along the geodetic normal
+N   tangent to the reference ellipsoid and directed toward geodetic north
+E   tangent to the reference ellipsoid and directed east
+D   directed downward, opposite to the outward ellipsoid normal
 ```
 
-The IGRF block returns magnetic-field components as `XYZ (nT)` in local NED
-axes. The subsystem converts them to tesla:
+The NED frame changes as the spacecraft moves. It is therefore a local frame rather than a single global frame.
+
+The MATLAB IGRF block returns the magnetic-field components as `XYZ` in local NED axes. In this output:
 
 ```text
-B_NED_T = 1e-9 * IGRF_XYZ_nT
+X   north component
+Y   east component
+Z   down component
 ```
-
-The magnetic-field transform chain is:
-
-```text
-B_NED_T -> B_ECEF_T -> B_I_T -> B_B_T
-```
-
-The orbit/environment tests check that the field norm is preserved across these
-rotations to roundoff level.
 
 ## Body Frame `B`
 
-The spacecraft body frame `B` is the frame of:
+`B` is rigidly attached to the spacecraft.
 
-- inertia matrix `I_B`,
-- body rates `omega_b`,
-- residual magnetic dipole `m_res_B_A_m2`,
-- disturbance torques `M_*_B_Nm`,
-- body-frame magnetic field `B_B_T`.
+Its exact axis orientation is defined by the spacecraft mechanical and CAD convention and must remain consistent with sensor mounting, actuator directions, inertia data, and torque signs.
 
-The project uses column vectors. A direction cosine matrix named `C_AB` maps
-components from frame `B` into frame `A`:
+The following quantities are expressed in body axes:
 
 ```text
-v_A = C_AB * v_B
+I_B - inertia matrix expressed in body axes
+omega_BI_B - angular velocity of body B relative to inertial frame I, expressed in body axes
+m_res_B_A_m2 - residual magnetic dipole expressed in body axes
+B_B_T - magnetic field expressed in body axes
+M_dist_B_Nm - total disturbance torque expressed in body axes
+M_rmm_B_Nm - residual magnetic moment torque expressed in body axes
+M_gg_B_Nm - gravity-gradient torque expressed in body axes
 ```
 
-The logged `DCM_be` name comes from the Aerospace Blockset signal naming. The
-project convention treats it as the inertial-to-body attitude DCM used by the
-tests and environment model:
+## DCM Convention
+
+The project uses the notation:
 
 ```text
-v_B = DCM_be * v_I
-B_B_T = DCM_be * B_I_T
-r_hat_B = DCM_be * (r_I_m / norm(r_I_m))
+C_AB maps vector components from frame B to frame A
 ```
 
-This is consistent with the JSON convention:
+The first subscript is the destination frame and the second is the source frame.
+
+Examples:
 
 ```text
-q_BI  maps inertial frame I to body frame B
-C_BI  maps v_I to v_B
+C_BI       inertial components to body components
+C_ECEFI    inertial components to ECEF components
+C_NEDECEF  ECEF components to NED components
 ```
 
-## Disturbance Torque Frames
+The inverse transformation is obtained by transposing the DCM because a valid direction cosine matrix is orthonormal.
 
-All disturbance torques consumed by the AOCS plant are expressed in body
-axes:
+## Quaternion Convention
+
+The project configuration quaternion is named:
 
 ```text
-M_dist_B_Nm
-M_rmm_B_Nm
-M_gg_B_Nm
+q_BI
 ```
 
-Residual magnetic moment torque:
+It represents the attitude transformation from inertial axes to body axes and is consistent with `C_BI`.
+
+The current runtime state bus still logs the Aerospace Blockset quaternion output as:
 
 ```text
-M_rmm_B_Nm = m_res_B_A_m2 x B_B_T
+q_be
 ```
 
-Gravity-gradient torque:
-
-```text
-r_hat_B = DCM_be * (r_I_m / norm(r_I_m))
-M_gg_B_Nm = 3 * mu / norm(r_I_m)^3 * cross(r_hat_B, I_B * r_hat_B)
-```
-
-The total modeled disturbance torque is:
-
-```text
-M_dist_B_Nm = M_rmm_B_Nm + M_gg_B_Nm
-```
+Aerospace Blockset quaternion blocks use the scalar-first convention.
 
 ## Sun Vector Convention
 
-The staged Sun model returns an approximate Earth-to-Sun vector:
+The low-precision Sun model returns:
 
 ```text
 r_sun_I_m
 ```
 
-It is expressed in J2000/ICRF-aligned inertial axes, matching the project `I`
-frame convention. For LEO use, the Earth-to-Sun direction is already adequate
-for many Sun-sensor and coarse SRP/eclipsing checks. When eclipse and SRP are
-wired, the spacecraft-to-Sun vector should be formed explicitly as:
+This is the approximate position of the Sun relative to the Earth, expressed in the project inertial frame.
+
+The spacecraft Sun direction is not exactly the same as the Earth Sun direction. The environment subsystem therefore forms a spacecraft-to-Sun vector by subtracting the spacecraft inertial position from the geocentric Sun position.
+
+The derived Sun products are:
 
 ```text
-r_sat_to_sun_I_m = r_sun_I_m - r_I_m
-sun_I_unit = r_sat_to_sun_I_m / norm(r_sat_to_sun_I_m)
-sun_B_unit = DCM_be * sun_I_unit
+r_sun_I_m          approximate Earth-to-Sun position vector in inertial axes
+sun_I_unit         spacecraft-to-Sun unit vector in inertial axes
+sun_B_unit         spacecraft-to-Sun unit vector in body axes
+sun_distance_m     spacecraft-to-Sun distance
+solar_flux_W_m2    solar flux evaluated at that distance
 ```
 
-The staged `AOCS_EnvironmentBus` fields for Sun products are:
+The body-frame Sun direction is obtained using the same inertial-to-body attitude transformation as the magnetic field and nadir direction.
+
+The default implementation uses:
 
 ```text
-sun_B_unit
-sun_I_unit
-r_sun_I_m
-sun_distance_m
-solar_flux_W_m2
+src/environment/sunPositionLowPrecision.m
+src/environment/computeSunProducts.m
 ```
 
-`sun_distance_m` and `solar_flux_W_m2` are evaluated for the spacecraft-to-Sun
-distance. In LEO this is numerically almost identical to the Earth-to-Sun
-distance, but the spacecraft-specific definition is the right contract for SRP.
+A higher-fidelity implementation may later use `planetEphemeris` or the Aerospace Blockset `Planetary Ephemeris` block. Those methods require the appropriate external JPL ephemeris data package.
 
-The default code path uses `src/environment/sunPositionLowPrecision.m` for the
-geocentric Sun vector and `src/environment/computeSunProducts.m` for the
-spacecraft-specific unit vectors and flux.
-A future higher-fidelity path can use Aerospace Toolbox `planetEphemeris` or the
-Aerospace Blockset `aerolibcelestial/Planetary Ephemeris` block, but that
-requires external JPL ephemeris data from `aeroDataPackage`.
+## Main Implementation Files
 
-## Implementation References
+The principal files related to frames, time, and environment calculations are:
 
-The main implementation points are:
+```text
+config/AocsSimulationConfig.json
+src/config/loadAocsSimulationConfig.m
+src/simulink/applyAocsSimulationSettings.m
+src/simulink/createAocs*Bus.m
+src/environment/sunPositionLowPrecision.m
+src/environment/computeSunProducts.m
+```
 
-- `config/AocsSimulationConfig.json` for epoch, orbit, and environment inputs,
-- `src/config/loadAocsSimulationConfig.m` for validation and normalized config,
-- `src/simulink/applyAocsSimulationSettings.m` for Aerospace Blockset mask
-  setup,
-- `src/simulink/createAocs*Bus.m` for bus contracts,
-- `src/environment/sunPositionLowPrecision.m` for the staged analytic Sun
-  vector.
+Any new environment or navigation subsystem should document:
+
+- the physical meaning of each vector,
+- the frame in which its components are expressed,
+- the units,
+- the direction of every DCM or quaternion,
+- the epoch and time scale used by date-dependent calculations.
