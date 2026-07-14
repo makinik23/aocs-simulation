@@ -46,6 +46,7 @@ massProps = requireStruct(spacecraft, "mass_properties", "spacecraft.mass_proper
 initial = requireStruct(raw, "initial_conditions", "initial_conditions");
 environment = requireStruct(raw, "environment", "environment");
 sun = requireStruct(environment, "sun", "environment.sun");
+eclipse = requireStruct(environment, "eclipse", "environment.eclipse");
 numerics = requireStruct(raw, "numerics", "numerics");
 conventions = requireStruct(raw, "conventions", "conventions");
 
@@ -105,6 +106,7 @@ if ~any(sunModel == supportedSunModels)
 end
 solarConstant_W_m2 = scalarField(sun, "solar_constant_W_m2", ...
     "environment.sun.solar_constant_W_m2", true);
+eclipseConfig = readEclipseConfig(eclipse);
 
 AOCS = struct();
 AOCS.Meta.Schema = schema;
@@ -151,6 +153,7 @@ AOCS.Environment.M_ext_B = M_ext_B;
 AOCS.Environment.m_res_B = m_res_B;
 AOCS.Environment.Sun.Model = sunModel;
 AOCS.Environment.Sun.SolarConstant_W_m2 = solarConstant_W_m2;
+AOCS.Environment.Eclipse = eclipseConfig;
 
 AOCS.Numerics.QuatNormEpsilon = scalarField(numerics, "quat_norm_epsilon", "numerics.quat_norm_epsilon", true);
 AOCS.Numerics.MaxAllowedEnergyDrift = scalarField(numerics, "max_allowed_energy_drift", "numerics.max_allowed_energy_drift", true);
@@ -224,6 +227,48 @@ config = struct();
 config.M_ext_B = AOCS.Environment.M_ext_B;
 config.m_res_B_A_m2 = AOCS.Environment.m_res_B;
 config.solar_constant_W_m2 = AOCS.Environment.Sun.SolarConstant_W_m2;
+end
+
+function config = readEclipseConfig(eclipse)
+% Description:
+%   Validates the project-level eclipse model configuration used to drive
+%   Aerospace Blockset Eclipse Shadow Model mask parameters.
+%
+% Arguments:
+%   eclipse - JSON object from environment.eclipse.
+%
+% Outputs:
+%   config - Struct containing normalized eclipse settings.
+
+config = struct();
+config.Enabled = logicalScalarField(eclipse, "enabled", "environment.eclipse.enabled");
+config.Model = enumStringField(eclipse, "model", "environment.eclipse.model", "dual_cone");
+config.TimeSource = enumStringField(eclipse, "time_source", "environment.eclipse.time_source", "dialog");
+config.CentralBody = enumStringField(eclipse, "central_body", "environment.eclipse.central_body", "Earth");
+config.IncludeEarth = logicalScalarField(eclipse, "include_earth", "environment.eclipse.include_earth");
+config.IncludeMoon = logicalScalarField(eclipse, "include_moon", "environment.eclipse.include_moon");
+config.OutputShadowRegion = logicalScalarField(eclipse, ...
+    "output_shadow_region", "environment.eclipse.output_shadow_region");
+config.EphemerisModel = enumStringField(eclipse, "ephemeris_model", ...
+    "environment.eclipse.ephemeris_model", ["DE405", "DE421", "DE423", "DE430", "DE432t"]);
+config.UseEphemerisDateRange = logicalScalarField(eclipse, ...
+    "use_ephemeris_date_range", "environment.eclipse.use_ephemeris_date_range");
+config.EphemerisStartUtc = columnField(eclipse, ...
+    "ephemeris_start_utc", "environment.eclipse.ephemeris_start_utc", 6);
+config.EphemerisEndUtc = columnField(eclipse, ...
+    "ephemeris_end_utc", "environment.eclipse.ephemeris_end_utc", 6);
+config.Action = enumStringField(eclipse, "action", "environment.eclipse.action", ...
+    ["Error", "Warning", "None"]);
+config.ZeroCrossing = logicalScalarField(eclipse, ...
+    "zero_crossing", "environment.eclipse.zero_crossing");
+
+validateUtcEpoch(config.EphemerisStartUtc, "environment.eclipse.ephemeris_start_utc");
+validateUtcEpoch(config.EphemerisEndUtc, "environment.eclipse.ephemeris_end_utc");
+
+if utcSerialDay(config.EphemerisEndUtc) <= utcSerialDay(config.EphemerisStartUtc)
+    error("AOCS:Config:InvalidEclipseEphemerisRange", ...
+        "environment.eclipse.ephemeris_end_utc must be later than environment.eclipse.ephemeris_start_utc.");
+end
 end
 
 function section = requireStruct(parent, fieldName, displayName)
@@ -303,6 +348,50 @@ end
 value = string(rawValue);
 if strlength(value) == 0
     error("AOCS:Config:InvalidField", "Config field %s must be non-empty.", displayName);
+end
+end
+
+function value = enumStringField(parent, fieldName, displayName, allowedValues)
+% Description:
+%   Reads a required string field and constrains it to an allowed set.
+%
+% Arguments:
+%   parent - Struct containing the requested field.
+%   fieldName - Field name to read.
+%   displayName - Human-readable field path for error messages.
+%   allowedValues - String-compatible array of supported values.
+%
+% Outputs:
+%   value - Valid scalar string from allowedValues.
+
+value = stringScalarField(parent, fieldName, displayName);
+allowedValues = string(allowedValues);
+
+if ~any(value == allowedValues)
+    error("AOCS:Config:InvalidField", ...
+        "Unsupported config field %s '%s'. Expected one of: %s.", ...
+        displayName, char(value), strjoin(allowedValues, ", "));
+end
+end
+
+function value = logicalScalarField(parent, fieldName, displayName)
+% Description:
+%   Reads a required JSON boolean and enforces scalar logical shape.
+%
+% Arguments:
+%   parent - Struct containing the requested field.
+%   fieldName - Field name to read.
+%   displayName - Human-readable field path for error messages.
+%
+% Outputs:
+%   value - Scalar logical value.
+
+rawValue = requireField(parent, fieldName, displayName);
+
+if islogical(rawValue) && isscalar(rawValue)
+    value = rawValue;
+else
+    error("AOCS:Config:InvalidField", "Config field %s must be a scalar boolean.", displayName);
 end
 end
 
@@ -448,6 +537,19 @@ end
 if second < 0 || second >= 60
     error("AOCS:Config:InvalidEpoch", "Config field %s has invalid second.", displayName);
 end
+end
+
+function serialDay = utcSerialDay(epochUtc)
+% Description:
+%   Converts a validated UTC vector to a serial day for range comparisons.
+%
+% Arguments:
+%   epochUtc - 6-by-1 UTC vector [year month day hour minute second]'.
+%
+% Outputs:
+%   serialDay - MATLAB serial day number.
+
+serialDay = datenum(epochUtc(:).');
 end
 
 function dayCount = daysInMonth(year, month)

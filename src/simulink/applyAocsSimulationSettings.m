@@ -22,6 +22,7 @@ applyOrbitPropagatorSettings(modelName);
 applyEciToLlaSettings(modelName, AOCS);
 applyEciToEcefDcmSettings(modelName, AOCS);
 applyIgrfSettings(modelName);
+applyEclipseShadowModelSettings(modelName, AOCS);
 end
 
 function applyAerospace6DofSettings(modelName)
@@ -186,6 +187,77 @@ for k = 1:numel(blocks)
 end
 end
 
+function applyEclipseShadowModelSettings(modelName, AOCS)
+% Description:
+%   Finds Aerospace Blockset Eclipse Shadow Model blocks and applies the
+%   project eclipse settings from environment.eclipse.
+%
+% Arguments:
+%   modelName - Loaded Simulink model name.
+%   AOCS - Validated configuration struct.
+%
+% Outputs:
+%   None.
+
+eclipse = AOCS.Environment.Eclipse;
+if ~eclipse.Enabled
+    return;
+end
+
+blocks = findEclipseShadowModelBlocks(modelName);
+if isempty(blocks)
+    error("AOCS:Simulink:MissingEclipseShadowModel", ...
+        "environment.eclipse.enabled is true, but no Eclipse Shadow Model block was found in model '%s'.", ...
+        char(modelName));
+end
+
+for k = 1:numel(blocks)
+    set_param(blocks{k}, ...
+        "units", "Metric (m)", ...
+        "shadowModel", eclipseShadowModelMaskValue(eclipse.Model), ...
+        "outputShadowRegion", onOff(eclipse.OutputShadowRegion), ...
+        "timeSource", eclipseTimeSourceMaskValue(eclipse.TimeSource), ...
+        "startDate", julianDateExpression(AOCS.Epoch.Utc), ...
+        "centralBody", char(eclipse.CentralBody), ...
+        "includeMoon", onOff(eclipse.IncludeMoon), ...
+        "includeEarth", onOff(eclipse.IncludeEarth), ...
+        "customRadius", numericString(AOCS.Orbit.CentralBodyConstants.radius_m), ...
+        "ephemerisModel", char(eclipse.EphemerisModel), ...
+        "useEphemerisDateRange", onOff(eclipse.UseEphemerisDateRange), ...
+        "ephemerisStartDate", julianDateExpression(eclipse.EphemerisStartUtc), ...
+        "ephemerisEndDate", julianDateExpression(eclipse.EphemerisEndUtc), ...
+        "action", char(eclipse.Action), ...
+        "zeroCrossing", onOff(eclipse.ZeroCrossing));
+end
+end
+
+function blocks = findEclipseShadowModelBlocks(modelName)
+% Description:
+%   Finds Eclipse Shadow Model blocks robustly, including built-in block
+%   types that are not masked subsystems.
+%
+% Arguments:
+%   modelName - Loaded Simulink model name.
+%
+% Outputs:
+%   blocks - Cell array of matching block paths.
+
+candidates = find_system(modelName, ...
+    "LookUnderMasks", "all", ...
+    "FollowLinks", "on", ...
+    "Type", "Block");
+
+blocks = {};
+for k = 1:numel(candidates)
+    try
+        if string(get_param(candidates{k}, "BlockType")) == "EclipseShadowModel"
+            blocks{end + 1} = candidates{k}; %#ok<AGROW>
+        end
+    catch
+    end
+end
+end
+
 function tf = isWithinMaskedSubsystem(block, maskType)
 % Description:
 %   Checks whether a block is nested inside a masked subsystem of a given
@@ -255,4 +327,79 @@ function value = numericString(value)
 %   value - Character vector preserving useful precision.
 
 value = sprintf("%.15g", value);
+end
+
+function value = onOff(flag)
+% Description:
+%   Converts a logical flag to the on/off strings expected by Simulink masks.
+%
+% Arguments:
+%   flag - Scalar logical.
+%
+% Outputs:
+%   value - 'on' when true, otherwise 'off'.
+
+if flag
+    value = "on";
+else
+    value = "off";
+end
+end
+
+function value = eclipseShadowModelMaskValue(model)
+% Description:
+%   Maps project eclipse model names to Aerospace Blockset mask values.
+%
+% Arguments:
+%   model - Project-level eclipse model string.
+%
+% Outputs:
+%   value - Mask value accepted by Eclipse Shadow Model.
+
+switch string(model)
+    case "dual_cone"
+        value = "Dual cone";
+    otherwise
+        error("AOCS:Simulink:UnsupportedEclipseModel", ...
+            "Unsupported eclipse model '%s'.", char(model));
+end
+end
+
+function value = eclipseTimeSourceMaskValue(timeSource)
+% Description:
+%   Maps project time-source names to Aerospace Blockset mask values.
+%
+% Arguments:
+%   timeSource - Project-level eclipse time source string.
+%
+% Outputs:
+%   value - Mask value accepted by Eclipse Shadow Model.
+
+switch string(timeSource)
+    case "dialog"
+        value = "Dialog";
+    otherwise
+        error("AOCS:Simulink:UnsupportedEclipseTimeSource", ...
+            "Unsupported eclipse time source '%s'.", char(timeSource));
+end
+end
+
+function value = julianDateExpression(epochUtc)
+% Description:
+%   Formats a UTC vector as a Simulink mask expression evaluated to Julian
+%   date by Aerospace Blockset blocks.
+%
+% Arguments:
+%   epochUtc - 6-by-1 UTC vector [year month day hour minute second]'.
+%
+% Outputs:
+%   value - Character vector expression, e.g. juliandate(2026, 1, 1, 0, 0, 0).
+
+value = sprintf("juliandate(%s, %s, %s, %s, %s, %s)", ...
+    integerString(epochUtc(1)), ...
+    integerString(epochUtc(2)), ...
+    integerString(epochUtc(3)), ...
+    integerString(epochUtc(4)), ...
+    integerString(epochUtc(5)), ...
+    numericString(epochUtc(6)));
 end

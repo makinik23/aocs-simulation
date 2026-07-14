@@ -225,6 +225,66 @@ src/environment/computeSunProducts.m
 
 A higher-fidelity implementation may later use `planetEphemeris` or the Aerospace Blockset `Planetary Ephemeris` block. Those methods require the appropriate external JPL ephemeris data package.
 
+## Eclipse Convention
+
+The eclipse model is implemented in Simulink with the Aerospace Blockset:
+
+```text
+Eclipse Shadow Model (Dual Cone)
+```
+
+The block receives the spacecraft inertial position:
+
+```text
+r_I_m
+```
+
+where `r_I_m` is the Earth-center to spacecraft position vector expressed in the project inertial frame, in meters.
+
+The block's `Fraction` output is exposed by the project as:
+
+```text
+sun_visibility
+```
+
+`sun_visibility` is the fraction of direct solar illumination available at the spacecraft:
+
+```text
+sun_visibility = 1      full direct sunlight
+sun_visibility = 0      full eclipse
+0 < sun_visibility < 1  partial eclipse
+```
+
+The raw solar flux from the Sun products remains:
+
+```text
+solar_flux_W_m2
+```
+
+This is the solar irradiance before eclipse shadowing. The eclipse-aware flux is:
+
+```text
+solar_flux_shadowed_W_m2 = sun_visibility * solar_flux_W_m2
+```
+
+The environment bus therefore carries both:
+
+```text
+solar_flux_W_m2             raw solar irradiance before eclipse shadowing
+solar_flux_shadowed_W_m2    solar irradiance after eclipse shadowing
+sun_visibility              direct solar illumination fraction
+```
+
+Models that need the physically available direct solar power, such as SRP, solar arrays, Sun sensors, and thermal inputs, should use `solar_flux_shadowed_W_m2`. The raw `solar_flux_W_m2` is retained for diagnostics and model comparison.
+
+The eclipse block parameters are configured from:
+
+```text
+environment.eclipse
+```
+
+in `config/AocsSimulationConfig.json`. The current dual-cone configuration uses JPL ephemeris data through Aerospace Blockset, so MATLAB must have the `Ephemeris Data for Aerospace Toolbox` add-on installed for the configured ephemeris model.
+
 ## Main Implementation Files
 
 The principal files related to frames, time, and environment calculations are:

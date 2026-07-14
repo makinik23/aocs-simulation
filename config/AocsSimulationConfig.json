@@ -59,6 +59,21 @@
     "sun": {
       "model": "low_precision_analytic",
       "solar_constant_W_m2": 1361.0
+    },
+    "eclipse": {
+      "enabled": true,
+      "model": "dual_cone",
+      "time_source": "dialog",
+      "central_body": "Earth",
+      "include_earth": true,
+      "include_moon": true,
+      "output_shadow_region": true,
+      "ephemeris_model": "DE405",
+      "use_ephemeris_date_range": true,
+      "ephemeris_start_utc": [2020, 1, 1, 0, 0, 0],
+      "ephemeris_end_utc": [2030, 1, 1, 0, 0, 0],
+      "action": "Error",
+      "zero_crossing": false
     }
   },
   "numerics": {

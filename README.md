@@ -97,8 +97,11 @@ AOCS Simulation
 ├── Attitude Dynamics
 │   └── AOCS_StateBus
 ├── Orbit & Environment
-│   ├── OrbitState
-│   └── EnvironmentBus
+│   ├── Orbit State & Geodetic Position
+│   ├── Sun Products
+│   ├── Eclipse Model
+│   ├── Environment Bus Assembly
+│   └── AOCS_EnvironmentBus
 └── Torque Sum
 ```
 
