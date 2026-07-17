@@ -15,13 +15,20 @@ projectRoot = fileparts(mfilename("fullpath"));
 addpath(fullfile(projectRoot, "src", "config"));
 addpath(fullfile(projectRoot, "src", "analysis"));
 
-AOCS = loadAocsSimulationConfig(fullfile(projectRoot, "config", "AocsSimulationConfig.json"), projectRoot);
+defaultAOCS = loadAocsSimulationConfig(fullfile(projectRoot, "config", "AocsSimulationConfig.json"), projectRoot);
 
 if nargin < 1 || strlength(string(resultsFile)) == 0
-    resultsFile = AOCS.Results.File;
+    resultsFile = defaultAOCS.Results.File;
 end
 
-load(resultsFile, "out");
+loaded = load(resultsFile);
+out = loaded.out;
+
+if isfield(loaded, "AOCS")
+    AOCS = loaded.AOCS;
+else
+    AOCS = defaultAOCS;
+end
 
 state = extractAocsState(out);
 omegaData = loggedSignalMatrix(state.omega_b.Data, 3, "omega_b");
@@ -91,5 +98,6 @@ if isempty(element)
 end
 
 torqueData = loggedSignalMatrix(element.Values.Data, 3, "M_dist_B_Nm");
-maxTorque = max(vecnorm(torqueData, 2, 2));
+totalDisturbanceTorque = torqueData + AOCS.Environment.M_ext_B(:).';
+maxTorque = max(vecnorm(totalDisturbanceTorque, 2, 2));
 end

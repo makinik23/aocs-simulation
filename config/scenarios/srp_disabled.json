@@ -1,0 +1,15 @@
+{
+  "extends": "../AocsSimulationConfig.json",
+  "mission": {
+    "name": "leo_srp_disabled",
+    "description": "CubeSat attitude dynamics with RMM and gravity-gradient torques, but SRP disabled"
+  },
+  "results": {
+    "file": "aocs_srp_disabled.mat"
+  },
+  "environment": {
+    "srp": {
+      "enabled": false
+    }
+  }
+}

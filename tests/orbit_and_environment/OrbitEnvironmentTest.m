@@ -23,11 +23,137 @@ classdef OrbitEnvironmentTest < matlab.unittest.TestCase
             addpath(testCase.ProjectRoot);
             addpath(fullfile(testCase.ProjectRoot, "src", "analysis"));
             addpath(fullfile(testCase.ProjectRoot, "src", "config"));
+            addpath(fullfile(testCase.ProjectRoot, "src", "environment"));
             addpath(fullfile(testCase.ProjectRoot, "src", "simulink"));
         end
     end
 
     methods (Test)
+        function planetEphemerisSunProductsStayPhysical(testCase)
+            % Description:
+            %   Checks standalone planetary-ephemeris Sun products over one year for
+            %   finite vectors, unit directions, and realistic Sun distance/flux.
+            %
+            % Arguments:
+            %   testCase - matlab.unittest.TestCase instance.
+            %
+            % Outputs:
+            %   None.
+
+            configFile = fullfile(testCase.ProjectRoot, "config", "AocsSimulationConfig.json");
+            AOCS = loadAocsSimulationConfig(configFile, testCase.ProjectRoot);
+
+            AU_m = 149597870700.0;
+            t_s = linspace(0, 365.25 * 86400, 16).';
+            r_I_m = [AOCS.Orbit.InitialKeplerian.semi_major_axis_m; 0; 0];
+            DCM_be = eye(3);
+
+            sunDistance_m = zeros(numel(t_s), 1);
+            solarFlux_W_m2 = zeros(numel(t_s), 1);
+            sunIUnitNorm = zeros(numel(t_s), 1);
+            sunBUnitNorm = zeros(numel(t_s), 1);
+            bodyTransformError = zeros(numel(t_s), 1);
+
+            for k = 1:numel(t_s)
+                r_sun_I_m = planetaryEphemerisSunVector(AOCS, t_s(k));
+                [sun_B_unit, sun_I_unit, r_sun_I_m, sun_distance_m, solar_flux_W_m2] = ...
+                    computeSunProducts(r_sun_I_m, ...
+                    AOCS.Environment.Sun.SolarConstant_W_m2, r_I_m, DCM_be);
+
+                testCase.verifyTrue(all(isfinite(r_sun_I_m)), "r_sun_I_m must remain finite.");
+                testCase.verifyTrue(all(isfinite(sun_I_unit)), "sun_I_unit must remain finite.");
+                testCase.verifyTrue(all(isfinite(sun_B_unit)), "sun_B_unit must remain finite.");
+
+                sunDistance_m(k) = sun_distance_m;
+                solarFlux_W_m2(k) = solar_flux_W_m2;
+                sunIUnitNorm(k) = norm(sun_I_unit);
+                sunBUnitNorm(k) = norm(sun_B_unit);
+                bodyTransformError(k) = norm(sun_B_unit - DCM_be * sun_I_unit);
+            end
+
+            testCase.verifyGreaterThan(min(sunDistance_m), 0.97 * AU_m, ...
+                sprintf("Minimum spacecraft-to-Sun distance is %.3e m.", min(sunDistance_m)));
+            testCase.verifyLessThan(max(sunDistance_m), 1.03 * AU_m, ...
+                sprintf("Maximum spacecraft-to-Sun distance is %.3e m.", max(sunDistance_m)));
+            testCase.verifyGreaterThan(min(solarFlux_W_m2), 1280, ...
+                sprintf("Minimum solar flux is %.3f W/m^2.", min(solarFlux_W_m2)));
+            testCase.verifyLessThan(max(solarFlux_W_m2), 1450, ...
+                sprintf("Maximum solar flux is %.3f W/m^2.", max(solarFlux_W_m2)));
+            testCase.verifyLessThanOrEqual(max(abs(sunIUnitNorm - 1)), 1e-12, ...
+                "sun_I_unit must remain unit length.");
+            testCase.verifyLessThanOrEqual(max(abs(sunBUnitNorm - 1)), 1e-12, ...
+                "sun_B_unit must remain unit length.");
+            testCase.verifyLessThanOrEqual(max(bodyTransformError), 1e-12, ...
+                "Body-frame Sun vector must match DCM_be * sun_I_unit.");
+        end
+
+        function srpConfigAndTorqueModelStayConsistent(testCase)
+            % Description:
+            %   Checks SRP config bus fields and the standalone flat-plate SRP
+            %   torque calculation used by the Simulink MATLAB Function block.
+            %
+            % Arguments:
+            %   testCase - matlab.unittest.TestCase instance.
+            %
+            % Outputs:
+            %   None.
+
+            configFile = fullfile(testCase.ProjectRoot, "config", "AocsSimulationConfig.json");
+            AOCS = loadAocsSimulationConfig(configFile, testCase.ProjectRoot);
+            busObject = createAocsEnvironmentConfigBus();
+            orbitBusObject = createAocsOrbitConfigBus();
+
+            expectedNames = ["rmm_enabled", "gravity_gradient_enabled", ...
+                "m_res_B_A_m2", "solar_constant_W_m2", "eclipse_enabled", ...
+                "srp_enabled", "srp_area_ref_m2", ...
+                "srp_coefficient_reflectivity", "srp_center_of_pressure_B_m"];
+            testCase.verifyEqual(string({busObject.Elements.Name}), expectedNames, ...
+                "AOCS_EnvironmentConfigBus element order must match AOCS.EnvironmentConfig.");
+
+            expectedOrbitNames = ["epoch_utc", "epoch_tdb_jd", "mu_m3_s2", ...
+                "central_body_radius_m", "semi_major_axis_m", "eccentricity", ...
+                "inclination_rad", "raan_rad", "argument_of_periapsis_rad", ...
+                "true_anomaly_rad"];
+            testCase.verifyEqual(string({orbitBusObject.Elements.Name}), expectedOrbitNames, ...
+                "AOCS_OrbitConfigBus element order must match AOCS.OrbitConfig.");
+            testCase.verifyEqual(AOCS.OrbitConfig.epoch_tdb_jd, AOCS.Epoch.TdbJulianDate);
+            testCase.verifyEqual(AOCS.EnvironmentConfig.rmm_enabled, double(AOCS.Environment.RmmEnabled));
+            testCase.verifyEqual(AOCS.EnvironmentConfig.gravity_gradient_enabled, ...
+                double(AOCS.Environment.GravityGradientEnabled));
+            testCase.verifyEqual(AOCS.EnvironmentConfig.eclipse_enabled, double(AOCS.Environment.Eclipse.Enabled));
+            testCase.verifyEqual(AOCS.EnvironmentConfig.srp_enabled, double(AOCS.Environment.SRP.Enabled));
+            testCase.verifyEqual(AOCS.EnvironmentConfig.srp_area_ref_m2, AOCS.Environment.SRP.AreaRef_m2);
+            testCase.verifyEqual(AOCS.EnvironmentConfig.srp_coefficient_reflectivity, ...
+                AOCS.Environment.SRP.CoefficientReflectivity);
+            testCase.verifyEqual(AOCS.EnvironmentConfig.srp_center_of_pressure_B_m, ...
+                AOCS.Environment.SRP.CenterOfPressure_B_m);
+
+            sun_B_unit = [1; 0; 0];
+            r_cp_B_m = [0; 0; 0.05];
+            solar_flux_shadowed_W_m2 = 1361.0;
+            area_ref_m2 = 0.03;
+            coefficient_reflectivity = 1.3;
+            c_m_s = 299792458.0;
+
+            [M_srp_B_Nm, F_srp_B_N, P_srp_N_m2] = computeSrpTorque( ...
+                sun_B_unit, solar_flux_shadowed_W_m2, 1.0, ...
+                area_ref_m2, coefficient_reflectivity, r_cp_B_m);
+
+            expectedPressure_N_m2 = solar_flux_shadowed_W_m2 / c_m_s;
+            expectedForce_B_N = [-expectedPressure_N_m2 * coefficient_reflectivity * area_ref_m2; 0; 0];
+            expectedTorque_B_Nm = cross(r_cp_B_m, expectedForce_B_N);
+
+            testCase.verifyEqual(P_srp_N_m2, expectedPressure_N_m2, "AbsTol", 1e-18);
+            testCase.verifyEqual(F_srp_B_N, expectedForce_B_N, "AbsTol", 1e-18);
+            testCase.verifyEqual(M_srp_B_Nm, expectedTorque_B_Nm, "AbsTol", 1e-18);
+
+            [M_eclipse_B_Nm, F_eclipse_B_N, P_eclipse_N_m2] = computeSrpTorque( ...
+                sun_B_unit, 0.0, 1.0, area_ref_m2, coefficient_reflectivity, r_cp_B_m);
+            testCase.verifyEqual(P_eclipse_N_m2, 0.0, "AbsTol", 0.0);
+            testCase.verifyEqual(F_eclipse_B_N, zeros(3, 1), "AbsTol", 0.0);
+            testCase.verifyEqual(M_eclipse_B_Nm, zeros(3, 1), "AbsTol", 0.0);
+        end
+
         function igrfEciFieldMatchesInjectedReference(testCase)
             % Description:
             %   Verifies the magnetic-field frame chain against injected
@@ -84,15 +210,33 @@ classdef OrbitEnvironmentTest < matlab.unittest.TestCase
             C_ECEF_NED = loggedMatrixSignal(logsout, "C_ECEF_NED");
             C_ECI_ECEF = loggedMatrixSignal(logsout, "C_ECI_ECEF");
             r_I_m = loggedVectorSignal(logsout, "r_I_m");
+            sun_B_unit = loggedVectorSignal(logsout, "sun_B_unit");
+            sun_I_unit = loggedVectorSignal(logsout, "sun_I_unit");
+            r_sun_I_m = loggedVectorSignal(logsout, "r_sun_I_m");
+            sun_distance_m = loggedScalarSignal(logsout, "sun_distance_m");
+            solar_flux_W_m2 = loggedScalarSignal(logsout, "solar_flux_W_m2");
+            solar_flux_shadowed_W_m2 = loggedScalarSignal(logsout, "solar_flux_shadowed_W_m2");
+            sun_visibility = loggedScalarSignal(logsout, "sun_visibility");
 
             testCase.verifyTrue(all(isfinite(B_NED_T), "all"), "B_NED_T must remain finite.");
             testCase.verifyTrue(all(isfinite(B_I_T), "all"), "B_I_T must remain finite.");
             testCase.verifyTrue(all(isfinite(B_B_T), "all"), "B_B_T must remain finite.");
             testCase.verifyTrue(all(isfinite(r_I_m), "all"), "r_I_m must remain finite.");
+            testCase.verifyTrue(all(isfinite(sun_B_unit), "all"), "sun_B_unit must remain finite.");
+            testCase.verifyTrue(all(isfinite(sun_I_unit), "all"), "sun_I_unit must remain finite.");
+            testCase.verifyTrue(all(isfinite(r_sun_I_m), "all"), "r_sun_I_m must remain finite.");
+            testCase.verifyTrue(all(isfinite(sun_distance_m), "all"), "sun_distance_m must remain finite.");
+            testCase.verifyTrue(all(isfinite(solar_flux_W_m2), "all"), "solar_flux_W_m2 must remain finite.");
+            testCase.verifyTrue(all(isfinite(solar_flux_shadowed_W_m2), "all"), ...
+                "solar_flux_shadowed_W_m2 must remain finite.");
+            testCase.verifyTrue(all(isfinite(sun_visibility), "all"), "sun_visibility must remain finite.");
 
             B_NED_norm_T = vecnorm(B_NED_T, 2, 2);
             B_I_norm_T = vecnorm(B_I_T, 2, 2);
             B_B_norm_T = vecnorm(B_B_T, 2, 2);
+            AU_m = 149597870700.0;
+            sunIUnitNorm = vecnorm(sun_I_unit, 2, 2);
+            sunBUnitNorm = vecnorm(sun_B_unit, 2, 2);
 
             testCase.verifyGreaterThan(min(B_NED_norm_T), 15e-6, ...
                 sprintf("Minimum geomagnetic field norm is %.3e T.", min(B_NED_norm_T)));
@@ -109,6 +253,52 @@ classdef OrbitEnvironmentTest < matlab.unittest.TestCase
             testCase.verifyLessThanOrEqual(max(bodyFieldError_T), 1e-12, ...
                 sprintf("Maximum B_B_T transform error is %.3e T.", max(bodyFieldError_T)));
 
+            expectedSun_B_unit = transformLoggedDcm(DCM_be, sun_I_unit, "DCM_be", "sun_I_unit");
+            bodySunError = vecnorm(sun_B_unit - expectedSun_B_unit, 2, 2);
+            expectedSun = computeExpectedSunProducts(AOCS, simOut.tout(:), r_I_m, DCM_be);
+            sunIError = vecnorm(sun_I_unit - expectedSun.sun_I_unit, 2, 2);
+            sunBError = vecnorm(sun_B_unit - expectedSun.sun_B_unit, 2, 2);
+            sunPositionError_m = vecnorm(r_sun_I_m - expectedSun.r_sun_I_m, 2, 2);
+            sunDistanceError_m = abs(sun_distance_m - expectedSun.sun_distance_m);
+            solarFluxError_W_m2 = abs(solar_flux_W_m2 - expectedSun.solar_flux_W_m2);
+            shadowedFluxError_W_m2 = abs(solar_flux_shadowed_W_m2 - solar_flux_W_m2 .* sun_visibility);
+
+            testCase.verifyLessThanOrEqual(max(abs(sunIUnitNorm - 1)), 1e-12, ...
+                "sun_I_unit must remain unit length.");
+            testCase.verifyLessThanOrEqual(max(abs(sunBUnitNorm - 1)), 1e-12, ...
+                "sun_B_unit must remain unit length.");
+            testCase.verifyGreaterThan(min(sun_distance_m), 0.97 * AU_m, ...
+                sprintf("Minimum spacecraft-to-Sun distance is %.3e m.", min(sun_distance_m)));
+            testCase.verifyLessThan(max(sun_distance_m), 1.03 * AU_m, ...
+                sprintf("Maximum spacecraft-to-Sun distance is %.3e m.", max(sun_distance_m)));
+            testCase.verifyGreaterThan(min(solar_flux_W_m2), 1280, ...
+                sprintf("Minimum solar flux is %.3f W/m^2.", min(solar_flux_W_m2)));
+            testCase.verifyLessThan(max(solar_flux_W_m2), 1450, ...
+                sprintf("Maximum solar flux is %.3f W/m^2.", max(solar_flux_W_m2)));
+            testCase.verifyGreaterThanOrEqual(min(sun_visibility), -1e-12, ...
+                sprintf("Minimum sun visibility is %.3e.", min(sun_visibility)));
+            testCase.verifyLessThanOrEqual(max(sun_visibility), 1 + 1e-12, ...
+                sprintf("Maximum sun visibility is %.3e.", max(sun_visibility)));
+            testCase.verifyGreaterThanOrEqual(min(solar_flux_shadowed_W_m2), -1e-9, ...
+                sprintf("Minimum shadowed solar flux is %.3e W/m^2.", min(solar_flux_shadowed_W_m2)));
+            testCase.verifyLessThanOrEqual(max(solar_flux_shadowed_W_m2 - solar_flux_W_m2), 1e-9, ...
+                "Shadowed solar flux must not exceed raw solar flux.");
+            testCase.verifyLessThanOrEqual(max(bodySunError), 1e-12, ...
+                sprintf("Maximum sun_B_unit transform error is %.3e.", max(bodySunError)));
+            testCase.verifyLessThanOrEqual(max(sunIError), 1e-12, ...
+                sprintf("Maximum sun_I_unit model error is %.3e.", max(sunIError)));
+            testCase.verifyLessThanOrEqual(max(sunBError), 1e-12, ...
+                sprintf("Maximum sun_B_unit model error is %.3e.", max(sunBError)));
+            testCase.verifyLessThanOrEqual(max(sunPositionError_m), 1e-3, ...
+                sprintf("Maximum r_sun_I_m model error is %.3e m.", max(sunPositionError_m)));
+            testCase.verifyLessThanOrEqual(max(sunDistanceError_m), 1e-3, ...
+                sprintf("Maximum sun_distance_m model error is %.3e m.", max(sunDistanceError_m)));
+            testCase.verifyLessThanOrEqual(max(solarFluxError_W_m2), 1e-9, ...
+                sprintf("Maximum solar_flux_W_m2 model error is %.3e W/m^2.", max(solarFluxError_W_m2)));
+            testCase.verifyLessThanOrEqual(max(shadowedFluxError_W_m2), 1e-9, ...
+                sprintf("Maximum solar_flux_shadowed_W_m2 product error is %.3e W/m^2.", ...
+                max(shadowedFluxError_W_m2)));
+
             testCase.verifyLessThanOrEqual(maximumOrthonormalityError(DCM_be), 1e-10, ...
                 "DCM_be should remain orthonormal.");
             testCase.verifyLessThanOrEqual(maximumOrthonormalityError(C_ECEF_NED), 1e-10, ...
@@ -116,13 +306,17 @@ classdef OrbitEnvironmentTest < matlab.unittest.TestCase
             testCase.verifyLessThanOrEqual(maximumOrthonormalityError(C_ECI_ECEF), 1e-10, ...
                 "C_ECI_ECEF should remain orthonormal.");
 
-            expectedM_rmm_B_Nm = residualMagneticTorque(AOCS.Environment.m_res_B, B_B_T);
-            expectedM_gg_B_Nm = gravityGradientTorque(AOCS.Spacecraft.I_B, ...
+            expectedM_rmm_B_Nm = AOCS.EnvironmentConfig.rmm_enabled .* ...
+                residualMagneticTorque(AOCS.Environment.m_res_B, B_B_T);
+            expectedM_gg_B_Nm = AOCS.EnvironmentConfig.gravity_gradient_enabled .* ...
+                gravityGradientTorque(AOCS.Spacecraft.I_B, ...
                 AOCS.Orbit.CentralBodyConstants.mu_m3_s2, r_I_m, DCM_be);
-            expectedM_dist_B_Nm = expectedM_rmm_B_Nm + expectedM_gg_B_Nm;
+            expectedM_srp_B_Nm = srpTorque(AOCS, sun_B_unit, solar_flux_shadowed_W_m2);
+            expectedM_dist_B_Nm = expectedM_rmm_B_Nm + expectedM_gg_B_Nm + expectedM_srp_B_Nm;
 
             expectedRmmNorm_Nm = vecnorm(expectedM_rmm_B_Nm, 2, 2);
             expectedGravityGradientNorm_Nm = vecnorm(expectedM_gg_B_Nm, 2, 2);
+            expectedSrpNorm_Nm = vecnorm(expectedM_srp_B_Nm, 2, 2);
             expectedDisturbanceNorm_Nm = vecnorm(expectedM_dist_B_Nm, 2, 2);
             torqueUpperBound_Nm = norm(AOCS.Environment.m_res_B) * max(B_B_norm_T);
             gravityGradientUpperBound_Nm = max(3 * AOCS.Orbit.CentralBodyConstants.mu_m3_s2 ./ ...
@@ -138,36 +332,70 @@ classdef OrbitEnvironmentTest < matlab.unittest.TestCase
                 "Gravity-gradient torque must stay below the inertia-norm analytical bound.");
             testCase.verifyLessThan(max(expectedGravityGradientNorm_Nm), 1e-7, ...
                 sprintf("Maximum gravity-gradient torque is %.3e N*m.", max(expectedGravityGradientNorm_Nm)));
+            testCase.verifyLessThan(max(expectedSrpNorm_Nm), 1e-7, ...
+                sprintf("Maximum SRP torque is %.3e N*m.", max(expectedSrpNorm_Nm)));
             testCase.verifyLessThan(max(expectedDisturbanceNorm_Nm), 2e-6, ...
                 sprintf("Maximum total disturbance torque is %.3e N*m.", max(expectedDisturbanceNorm_Nm)));
 
-            if norm(AOCS.Environment.m_res_B) > 0
+            if AOCS.EnvironmentConfig.rmm_enabled > 0.5 && norm(AOCS.Environment.m_res_B) > 0
                 testCase.verifyGreaterThan(max(expectedRmmNorm_Nm), 1e-9, ...
                     sprintf("Maximum residual magnetic torque is %.3e N*m.", max(expectedRmmNorm_Nm)));
             end
 
-            if max(eig(AOCS.Spacecraft.I_B)) - min(eig(AOCS.Spacecraft.I_B)) > 1e-12
+            if AOCS.EnvironmentConfig.gravity_gradient_enabled > 0.5 ...
+                    && max(eig(AOCS.Spacecraft.I_B)) - min(eig(AOCS.Spacecraft.I_B)) > 1e-12
                 testCase.verifyGreaterThan(max(expectedGravityGradientNorm_Nm), 1e-10, ...
                     sprintf("Maximum gravity-gradient torque is %.3e N*m.", max(expectedGravityGradientNorm_Nm)));
             end
 
             M_rmm_B_Nm = loggedVectorSignal(logsout, "M_rmm_B_Nm");
             M_gg_B_Nm = loggedVectorSignal(logsout, "M_gg_B_Nm");
+            M_srp_B_Nm = loggedVectorSignal(logsout, "M_srp_B_Nm");
             M_dist_B_Nm = loggedVectorSignal(logsout, "M_dist_B_Nm");
 
             rmmTorqueError_Nm = vecnorm(M_rmm_B_Nm - expectedM_rmm_B_Nm, 2, 2);
             gravityGradientTorqueError_Nm = vecnorm(M_gg_B_Nm - expectedM_gg_B_Nm, 2, 2);
+            srpTorqueError_Nm = vecnorm(M_srp_B_Nm - expectedM_srp_B_Nm, 2, 2);
             disturbanceTorqueError_Nm = vecnorm(M_dist_B_Nm - expectedM_dist_B_Nm, 2, 2);
-            disturbanceSumError_Nm = vecnorm(M_dist_B_Nm - (M_rmm_B_Nm + M_gg_B_Nm), 2, 2);
+            disturbanceSumError_Nm = vecnorm(M_dist_B_Nm - (M_rmm_B_Nm + M_gg_B_Nm + M_srp_B_Nm), 2, 2);
 
             testCase.verifyLessThanOrEqual(max(rmmTorqueError_Nm), 1e-12, ...
                 sprintf("Maximum M_rmm_B_Nm error is %.3e N*m.", max(rmmTorqueError_Nm)));
             testCase.verifyLessThanOrEqual(max(gravityGradientTorqueError_Nm), 1e-12, ...
                 sprintf("Maximum M_gg_B_Nm error is %.3e N*m.", max(gravityGradientTorqueError_Nm)));
+            testCase.verifyLessThanOrEqual(max(srpTorqueError_Nm), 1e-12, ...
+                sprintf("Maximum M_srp_B_Nm error is %.3e N*m.", max(srpTorqueError_Nm)));
             testCase.verifyLessThanOrEqual(max(disturbanceTorqueError_Nm), 1e-12, ...
                 sprintf("Maximum M_dist_B_Nm error is %.3e N*m.", max(disturbanceTorqueError_Nm)));
             testCase.verifyLessThanOrEqual(max(disturbanceSumError_Nm), 1e-12, ...
                 sprintf("Maximum M_dist_B_Nm sum error is %.3e N*m.", max(disturbanceSumError_Nm)));
+        end
+
+        function eclipseDisabledBypassesShadowing(testCase)
+            % Description:
+            %   Verifies that environment.eclipse.enabled=false forces full
+            %   direct solar illumination at the subsystem output.
+            %
+            % Arguments:
+            %   testCase - matlab.unittest.TestCase instance.
+            %
+            % Outputs:
+            %   None.
+
+            configFile = fullfile(testCase.ProjectRoot, "config", "scenarios", "eclipse_disabled.json");
+            AOCS = loadAocsSimulationConfig(configFile, testCase.ProjectRoot);
+            simOut = run_aocs_simulation(configFile);
+            logsout = simOut.logsout;
+
+            sun_visibility = loggedScalarSignal(logsout, "sun_visibility");
+            solar_flux_W_m2 = loggedScalarSignal(logsout, "solar_flux_W_m2");
+            solar_flux_shadowed_W_m2 = loggedScalarSignal(logsout, "solar_flux_shadowed_W_m2");
+
+            testCase.verifyEqual(AOCS.EnvironmentConfig.eclipse_enabled, 0.0);
+            testCase.verifyLessThanOrEqual(max(abs(sun_visibility - 1.0)), 1e-12, ...
+                "Disabled eclipse model must force sun_visibility to one.");
+            testCase.verifyLessThanOrEqual(max(abs(solar_flux_shadowed_W_m2 - solar_flux_W_m2)), 1e-9, ...
+                "Disabled eclipse model must leave solar flux unshadowed.");
         end
 
         function environmentBusAssemblyMatchesBusObjectOrder(testCase)
@@ -194,6 +422,87 @@ classdef OrbitEnvironmentTest < matlab.unittest.TestCase
 
             testCase.verifyEqual(actualNames, expectedNames, ...
                 "Environment Bus Assembly input order must match AOCS_EnvironmentBus.");
+        end
+
+        function eclipseShadowModelMaskFollowsConfig(testCase)
+            % Description:
+            %   Verifies that the Aerospace Blockset Eclipse Shadow Model
+            %   mask is driven by environment.eclipse from the project config.
+            %
+            % Arguments:
+            %   testCase - matlab.unittest.TestCase instance.
+            %
+            % Outputs:
+            %   None.
+
+            configFile = fullfile(testCase.ProjectRoot, "config", "AocsSimulationConfig.json");
+            AOCS = setupAocsSimulation(configFile);
+
+            load_system(AOCS.Model.File);
+            cleanup = onCleanup(@() close_system(AOCS.Model.Name, 0));
+            applyAocsSimulationSettings(AOCS.Model.Name, AOCS);
+
+            blockPath = AOCS.Model.Name + "/Orbit & Environment/Eclipse Model/Eclipse Shadow Model (Dual Cone)";
+            testCase.assertEqual(string(get_param(blockPath, "BlockType")), "EclipseShadowModel", ...
+                "Expected Eclipse Shadow Model block is missing from Orbit & Environment/Eclipse Model.");
+
+            eclipse = AOCS.Environment.Eclipse;
+            testCase.verifyEqual(string(get_param(blockPath, "units")), "Metric (m)");
+            testCase.verifyEqual(string(get_param(blockPath, "shadowModel")), "Dual cone");
+            testCase.verifyEqual(string(get_param(blockPath, "outputShadowRegion")), onOff(eclipse.OutputShadowRegion));
+            testCase.verifyEqual(string(get_param(blockPath, "timeSource")), "Dialog");
+            testCase.verifyEqual(string(get_param(blockPath, "startDate")), julianDateExpression(AOCS.Epoch.Utc));
+            testCase.verifyEqual(string(get_param(blockPath, "centralBody")), eclipse.CentralBody);
+            testCase.verifyEqual(string(get_param(blockPath, "includeEarth")), onOff(eclipse.IncludeEarth));
+            testCase.verifyEqual(string(get_param(blockPath, "includeMoon")), onOff(eclipse.IncludeMoon));
+            testCase.verifyEqual(string(get_param(blockPath, "customRadius")), ...
+                sprintf("%.15g", AOCS.Orbit.CentralBodyConstants.radius_m));
+            testCase.verifyEqual(string(get_param(blockPath, "ephemerisModel")), eclipse.EphemerisModel);
+            testCase.verifyEqual(string(get_param(blockPath, "useEphemerisDateRange")), ...
+                onOff(eclipse.UseEphemerisDateRange));
+            testCase.verifyEqual(string(get_param(blockPath, "ephemerisStartDate")), ...
+                julianDateExpression(eclipse.EphemerisStartUtc));
+            testCase.verifyEqual(string(get_param(blockPath, "ephemerisEndDate")), ...
+                julianDateExpression(eclipse.EphemerisEndUtc));
+            testCase.verifyEqual(string(get_param(blockPath, "action")), eclipse.Action);
+            testCase.verifyEqual(string(get_param(blockPath, "zeroCrossing")), onOff(eclipse.ZeroCrossing));
+        end
+
+        function planetaryEphemerisBlockMaskFollowsConfig(testCase)
+            % Description:
+            %   Verifies that the Sun Products subsystem uses the Aerospace
+            %   Blockset Planetary Ephemeris block configured from environment.sun.
+            %
+            % Arguments:
+            %   testCase - matlab.unittest.TestCase instance.
+            %
+            % Outputs:
+            %   None.
+
+            configFile = fullfile(testCase.ProjectRoot, "config", "AocsSimulationConfig.json");
+            AOCS = setupAocsSimulation(configFile);
+
+            load_system(AOCS.Model.File);
+            cleanup = onCleanup(@() close_system(AOCS.Model.Name, 0));
+            applyAocsSimulationSettings(AOCS.Model.Name, AOCS);
+
+            blockPath = AOCS.Model.Name + "/Orbit & Environment/Sun Products/Planetary Ephemeris";
+            testCase.assertEqual(string(get_param(blockPath, "BlockType")), "PlanetaryEphem", ...
+                "Expected Planetary Ephemeris block is missing from Sun Products.");
+
+            sun = AOCS.Environment.Sun;
+            testCase.verifyEqual(string(get_param(blockPath, "units")), "m,m/s");
+            testCase.verifyEqual(string(get_param(blockPath, "epochFormat")), "Julian date");
+            testCase.verifyEqual(string(get_param(blockPath, "ephemerisModel")), sun.EphemerisModel);
+            testCase.verifyEqual(string(get_param(blockPath, "center")), "Earth");
+            testCase.verifyEqual(string(get_param(blockPath, "target")), "Sun");
+            testCase.verifyEqual(string(get_param(blockPath, "useDateRange")), onOff(sun.UseEphemerisDateRange));
+            testCase.verifyEqual(string(get_param(blockPath, "startDate")), ...
+                julianDateExpression(sun.EphemerisStartUtc));
+            testCase.verifyEqual(string(get_param(blockPath, "endDate")), ...
+                julianDateExpression(sun.EphemerisEndUtc));
+            testCase.verifyEqual(string(get_param(blockPath, "action")), sun.Action);
+            testCase.verifyEqual(string(get_param(blockPath, "outputVelocity")), "off");
         end
     end
 end
@@ -276,6 +585,28 @@ element = logsout.getElement(char(signalName));
 data = loggedSignalMatrix(element.Values.Data, 3, signalName);
 end
 
+function data = loggedScalarSignal(logsout, signalName)
+% Description:
+%   Reads a logged scalar signal as an N-by-1 vector.
+%
+% Arguments:
+%   logsout - Simulink logsout dataset.
+%   signalName - Logged signal name.
+%
+% Outputs:
+%   data - N-by-1 signal samples.
+
+element = logsout.getElement(char(signalName));
+data = squeeze(element.Values.Data);
+data = data(:);
+
+if ~isvector(data)
+    error("AOCS:Tests:UnexpectedSignalShape", ...
+        "Logged signal '%s' has shape %s; expected scalar samples.", ...
+        char(signalName), mat2str(size(element.Values.Data)));
+end
+end
+
 function data = loggedMatrixSignal(logsout, signalName)
 % Description:
 %   Reads a logged 3-by-3 DCM signal as a 3-by-3-by-N page array.
@@ -321,6 +652,38 @@ for k = 1:numel(ports.Inport)
 end
 end
 
+function value = onOff(flag)
+% Description:
+%   Converts logical values to Simulink mask on/off strings for assertions.
+%
+% Arguments:
+%   flag - Scalar logical.
+%
+% Outputs:
+%   value - String scalar "on" or "off".
+
+if flag
+    value = "on";
+else
+    value = "off";
+end
+end
+
+function value = julianDateExpression(epochUtc)
+% Description:
+%   Formats a UTC vector as the Julian-date mask expression used by the
+%   eclipse configuration script.
+%
+% Arguments:
+%   epochUtc - 6-by-1 UTC vector [year month day hour minute second]'.
+%
+% Outputs:
+%   value - String scalar expression.
+
+value = string(sprintf("juliandate(%.0f, %.0f, %.0f, %.0f, %.0f, %.15g)", ...
+    epochUtc(1), epochUtc(2), epochUtc(3), epochUtc(4), epochUtc(5), epochUtc(6)));
+end
+
 function vectorsOut = transformLoggedDcm(dcmPages, vectorsIn, dcmName, vectorName)
 % Description:
 %   Applies a logged 3-by-3-by-N DCM page array to an N-by-3 vector signal.
@@ -362,6 +725,71 @@ I3 = eye(3);
 for k = 1:size(dcmPages, 3)
     maxError = max(maxError, norm(dcmPages(:, :, k) * dcmPages(:, :, k).' - I3, "fro"));
 end
+end
+
+function expected = computeExpectedSunProducts(AOCS, t_s, r_I_m, DCM_be)
+% Description:
+%   Recomputes Sun products from logged orbit and attitude samples using the
+%   project MATLAB implementation.
+%
+% Arguments:
+%   AOCS - Validated simulation configuration struct.
+%   t_s - N-by-1 simulation time samples [s].
+%   r_I_m - N-by-3 inertial spacecraft position samples [m].
+%   DCM_be - 3-by-3-by-N DCM samples mapping inertial vectors into body axes.
+%
+% Outputs:
+%   expected - Struct containing expected Sun product sample histories.
+
+sampleCount = size(r_I_m, 1);
+if numel(t_s) ~= sampleCount
+    error("AOCS:Tests:SampleCountMismatch", ...
+        "Simulation time has %d samples but r_I_m has %d samples.", ...
+        numel(t_s), sampleCount);
+end
+
+if size(DCM_be, 3) ~= sampleCount
+    error("AOCS:Tests:SampleCountMismatch", ...
+        "Signal 'DCM_be' has %d samples but r_I_m has %d samples.", ...
+        size(DCM_be, 3), sampleCount);
+end
+
+expected.sun_B_unit = zeros(sampleCount, 3);
+expected.sun_I_unit = zeros(sampleCount, 3);
+expected.r_sun_I_m = zeros(sampleCount, 3);
+expected.sun_distance_m = zeros(sampleCount, 1);
+expected.solar_flux_W_m2 = zeros(sampleCount, 1);
+
+for k = 1:sampleCount
+    r_sun_I_m = planetaryEphemerisSunVector(AOCS, t_s(k));
+    [sun_B_unit, sun_I_unit, r_sun_I_m, sun_distance_m, solar_flux_W_m2] = ...
+        computeSunProducts(r_sun_I_m, AOCS.Environment.Sun.SolarConstant_W_m2, ...
+        r_I_m(k, :).', DCM_be(:, :, k));
+
+    expected.sun_B_unit(k, :) = sun_B_unit.';
+    expected.sun_I_unit(k, :) = sun_I_unit.';
+    expected.r_sun_I_m(k, :) = r_sun_I_m.';
+    expected.sun_distance_m(k) = sun_distance_m;
+    expected.solar_flux_W_m2(k) = solar_flux_W_m2;
+end
+end
+
+function r_sun_I_m = planetaryEphemerisSunVector(AOCS, t_s)
+% Description:
+%   Evaluates the same JPL ephemeris family used by the Simulink Planetary
+%   Ephemeris block for test-reference calculations.
+%
+% Arguments:
+%   AOCS - Validated simulation configuration struct.
+%   t_s - Elapsed simulation time from the epoch [s].
+%
+% Outputs:
+%   r_sun_I_m - Earth-to-Sun vector in ICRF axes [m].
+
+jd_tdb = AOCS.Epoch.TdbJulianDate + double(t_s) / 86400.0;
+model = erase(AOCS.Environment.Sun.EphemerisModel, "DE");
+r_sun_I_km = planetEphemeris(jd_tdb, "Earth", "Sun", char(model), "km", "Error");
+r_sun_I_m = 1000.0 .* r_sun_I_km(:);
 end
 
 function M_rmm_B_Nm = residualMagneticTorque(m_res_B_A_m2, B_B_T)
@@ -411,5 +839,36 @@ for k = 1:sampleCount
     rHat_B = DCM_be(:, :, k) * rHat_I;
     M_gg_B_Nm(k, :) = (3 * mu_m3_s2 / rNorm_m^3 * ...
         cross(rHat_B, I_B_kg_m2 * rHat_B)).';
+end
+end
+
+function M_srp_B_Nm = srpTorque(AOCS, sun_B_unit, solar_flux_shadowed_W_m2)
+% Description:
+%   Computes expected SRP torque samples from logged Sun products and the
+%   validated environment configuration.
+%
+% Arguments:
+%   AOCS - Validated simulation configuration struct.
+%   sun_B_unit - N-by-3 spacecraft-to-Sun unit vectors in body axes.
+%   solar_flux_shadowed_W_m2 - N-by-1 shadowed solar irradiance samples.
+%
+% Outputs:
+%   M_srp_B_Nm - N-by-3 SRP torque samples [N*m].
+
+sampleCount = size(sun_B_unit, 1);
+if numel(solar_flux_shadowed_W_m2) ~= sampleCount
+    error("AOCS:Tests:SampleCountMismatch", ...
+        "Signal 'solar_flux_shadowed_W_m2' has %d samples but 'sun_B_unit' has %d samples.", ...
+        numel(solar_flux_shadowed_W_m2), sampleCount);
+end
+
+M_srp_B_Nm = zeros(sampleCount, 3);
+for k = 1:sampleCount
+    M_srp_B_Nm(k, :) = computeSrpTorque( ...
+        sun_B_unit(k, :).', solar_flux_shadowed_W_m2(k), ...
+        AOCS.EnvironmentConfig.srp_enabled, ...
+        AOCS.EnvironmentConfig.srp_area_ref_m2, ...
+        AOCS.EnvironmentConfig.srp_coefficient_reflectivity, ...
+        AOCS.EnvironmentConfig.srp_center_of_pressure_B_m).';
 end
 end

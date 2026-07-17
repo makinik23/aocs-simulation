@@ -23,6 +23,8 @@ elems(5) = busElement("sun_I_unit", [3 1], "1", "Unit vector from spacecraft to 
 elems(6) = busElement("r_sun_I_m", [3 1], "m", "Approximate Earth-to-Sun position vector expressed in inertial axes");
 elems(7) = busElement("sun_distance_m", 1, "m", "Approximate spacecraft-to-Sun distance");
 elems(8) = busElement("solar_flux_W_m2", 1, "W/m^2", "Solar irradiance scaled by spacecraft-to-Sun distance");
+elems(9) = busElement("solar_flux_shadowed_W_m2", 1, "W/m^2", "Solar irradiance, takes into account sun visibility");
+elems(10) = busElement("sun_visibility", 1, "1", "Fraction of direct solar illumination in [0, 1]");
 
 AOCS_EnvironmentBus = Simulink.Bus;
 AOCS_EnvironmentBus.Description = "Runtime environment products bus";

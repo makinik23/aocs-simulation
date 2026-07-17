@@ -2,7 +2,7 @@
   "schema": "AocsSimulationConfig/v1",
   "mission": {
     "name": "leo_orbit_environment_disturbed_rigid_body",
-    "description": "CubeSat attitude dynamics with Kepler orbit, IGRF magnetic field, RMM, and gravity-gradient disturbance torques"
+    "description": "CubeSat attitude dynamics with Kepler orbit, IGRF magnetic field, eclipse, RMM, gravity-gradient, and SRP disturbance torques"
   },
   "models": {
     "plant": "aocs_plant",
@@ -22,7 +22,8 @@
   },
   "epoch": {
     "utc": [2026, 1, 1, 0, 0, 0],
-    "time_system": "UTC"
+    "time_system": "UTC",
+    "tdb_minus_utc_s": 69.184
   },
   "orbit": {
     "central_body": "Earth",
@@ -56,9 +57,40 @@
   "environment": {
     "external_torque_B_Nm": [0.0, 0.0, 0.0],
     "residual_magnetic_dipole_B_A_m2": [0.01, 0.0, 0.0],
+    "disturbances": {
+      "residual_magnetic_moment_enabled": true,
+      "gravity_gradient_enabled": true
+    },
     "sun": {
-      "model": "low_precision_analytic",
-      "solar_constant_W_m2": 1361.0
+      "model": "planet_ephemeris",
+      "ephemeris_model": "DE405",
+      "solar_constant_W_m2": 1361.0,
+      "use_ephemeris_date_range": true,
+      "ephemeris_start_utc": [2020, 1, 1, 0, 0, 0],
+      "ephemeris_end_utc": [2030, 1, 1, 0, 0, 0],
+      "action": "Error"
+    },
+    "srp": {
+      "enabled": true,
+      "model": "flat_plate_constant_area",
+      "area_ref_m2": 0.03,
+      "coefficient_reflectivity": 1.3,
+      "center_of_pressure_B_m": [0.0, 0.0, 0.05]
+    },
+    "eclipse": {
+      "enabled": true,
+      "model": "dual_cone",
+      "time_source": "dialog",
+      "central_body": "Earth",
+      "include_earth": true,
+      "include_moon": true,
+      "output_shadow_region": true,
+      "ephemeris_model": "DE405",
+      "use_ephemeris_date_range": true,
+      "ephemeris_start_utc": [2020, 1, 1, 0, 0, 0],
+      "ephemeris_end_utc": [2030, 1, 1, 0, 0, 0],
+      "action": "Error",
+      "zero_crossing": false
     }
   },
   "numerics": {
