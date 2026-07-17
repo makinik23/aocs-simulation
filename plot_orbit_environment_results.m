@@ -42,6 +42,7 @@ B_I_T = loggedVector(logsout, "B_I_T", 3);
 B_B_T = loggedVector(logsout, "B_B_T", 3);
 M_rmm_B_Nm = loggedVector(logsout, "M_rmm_B_Nm", 3);
 M_gg_B_Nm = loggedVector(logsout, "M_gg_B_Nm", 3);
+M_srp_B_Nm = loggedVector(logsout, "M_srp_B_Nm", 3);
 M_dist_B_Nm = loggedVector(logsout, "M_dist_B_Nm", 3);
 
 orbit = computeOrbitDiagnostics(r_I_m, v_I_m_s, AOCS);
@@ -52,9 +53,9 @@ figures(1) = plotInertialOrbit3d(r_I_m, t_min, orbit, AOCS);
 figures(2) = plotOrbitKinematics(t_min, orbit);
 figures(3) = plotGroundTrackAndLla(t_min, lla, orbit);
 figures(4) = plotEnvironmentProducts(t_min, B_NED_T, B_I_T, B_B_T, ...
-    M_rmm_B_Nm, M_gg_B_Nm, M_dist_B_Nm);
+    M_rmm_B_Nm, M_gg_B_Nm, M_srp_B_Nm, M_dist_B_Nm);
 
-printSummary(orbit, B_NED_T, B_I_T, B_B_T, M_rmm_B_Nm, M_gg_B_Nm, M_dist_B_Nm);
+printSummary(orbit, B_NED_T, B_I_T, B_B_T, M_rmm_B_Nm, M_gg_B_Nm, M_srp_B_Nm, M_dist_B_Nm);
 exportFigures(figures, exportDirectory);
 end
 
@@ -306,7 +307,7 @@ styleAxes(gca)
 end
 
 function fig = plotEnvironmentProducts(t_min, B_NED_T, B_I_T, B_B_T, ...
-    M_rmm_B_Nm, M_gg_B_Nm, M_dist_B_Nm)
+    M_rmm_B_Nm, M_gg_B_Nm, M_srp_B_Nm, M_dist_B_Nm)
 % Description:
 %   Plots magnetic-field products and disturbance torques.
 
@@ -315,6 +316,7 @@ B_I_uT = B_I_T .* 1e6;
 B_B_uT = B_B_T .* 1e6;
 M_rmm_nNm = M_rmm_B_Nm .* 1e9;
 M_gg_nNm = M_gg_B_Nm .* 1e9;
+M_srp_nNm = M_srp_B_Nm .* 1e9;
 M_dist_nNm = M_dist_B_Nm .* 1e9;
 
 fig = figure("Name", "Orbit environment - magnetic field and torques", "Color", "w");
@@ -364,12 +366,13 @@ nexttile
 plot(t_min, vecnorm(M_rmm_nNm, 2, 2), "LineWidth", 1.2)
 hold on
 plot(t_min, vecnorm(M_gg_nNm, 2, 2), "LineWidth", 1.2)
+plot(t_min, vecnorm(M_srp_nNm, 2, 2), "LineWidth", 1.2)
 plot(t_min, vecnorm(M_dist_nNm, 2, 2), "LineWidth", 1.4)
 grid on
 xlabel("Time [min]")
 ylabel("|M| [nN*m]")
 title("Disturbance torque norms")
-legend("RMM", "gravity gradient", "total", "Location", "best")
+legend("RMM", "gravity gradient", "SRP", "total", "Location", "best")
 styleAxes(gca)
 
 nexttile
@@ -382,7 +385,7 @@ legend("x", "y", "z", "Location", "best")
 styleAxes(gca)
 end
 
-function printSummary(orbit, B_NED_T, B_I_T, B_B_T, M_rmm_B_Nm, M_gg_B_Nm, M_dist_B_Nm)
+function printSummary(orbit, B_NED_T, B_I_T, B_B_T, M_rmm_B_Nm, M_gg_B_Nm, M_srp_B_Nm, M_dist_B_Nm)
 % Description:
 %   Prints a compact numerical summary matching the plotted diagnostics.
 
@@ -399,6 +402,7 @@ fprintf("|B_I|-|B_B| max diff [T]   : %.3e\n", ...
     max(abs(vecnorm(B_I_T, 2, 2) - vecnorm(B_B_T, 2, 2))));
 fprintf("|M_rmm| [nN*m] min/mean/max: %.6f / %.6f / %.6f\n", vectorNormStats(M_rmm_B_Nm .* 1e9));
 fprintf("|M_gg| [nN*m] min/mean/max : %.6f / %.6f / %.6f\n", vectorNormStats(M_gg_B_Nm .* 1e9));
+fprintf("|M_srp| [nN*m] min/mean/max: %.6f / %.6f / %.6f\n", vectorNormStats(M_srp_B_Nm .* 1e9));
 fprintf("|M_dist| [nN*m] min/mean/max: %.6f / %.6f / %.6f\n\n", vectorNormStats(M_dist_B_Nm .* 1e9));
 end
 

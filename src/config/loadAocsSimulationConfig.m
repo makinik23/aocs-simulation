@@ -25,7 +25,7 @@ if ~isfile(configFile)
     error("AOCS:Config:MissingFile", "AOCS config file not found: %s", configFile);
 end
 
-raw = jsondecode(fileread(configFile));
+raw = readAocsConfigFile(configFile);
 
 schema = stringScalarField(raw, "schema", "schema");
 if schema ~= "AocsSimulationConfig/v1"
@@ -45,7 +45,9 @@ spacecraft = requireStruct(raw, "spacecraft", "spacecraft");
 massProps = requireStruct(spacecraft, "mass_properties", "spacecraft.mass_properties");
 initial = requireStruct(raw, "initial_conditions", "initial_conditions");
 environment = requireStruct(raw, "environment", "environment");
+disturbances = requireStruct(environment, "disturbances", "environment.disturbances");
 sun = requireStruct(environment, "sun", "environment.sun");
+srp = requireStruct(environment, "srp", "environment.srp");
 eclipse = requireStruct(environment, "eclipse", "environment.eclipse");
 numerics = requireStruct(raw, "numerics", "numerics");
 conventions = requireStruct(raw, "conventions", "conventions");
@@ -57,6 +59,9 @@ if timeSystem ~= "UTC"
     error("AOCS:Config:UnsupportedTimeSystem", ...
         "Unsupported epoch.time_system '%s'. Expected 'UTC'.", char(timeSystem));
 end
+tdbMinusUtc_s = scalarField(epoch, "tdb_minus_utc_s", "epoch.tdb_minus_utc_s", false);
+validateTdbMinusUtc(tdbMinusUtc_s);
+epochTdbJd = calendarUtcToJulianDate(epochUtc) + tdbMinusUtc_s / 86400.0;
 
 centralBody = stringScalarField(orbit, "central_body", "orbit.central_body");
 centralBodyConstants = centralBodyConstantsFor(centralBody);
@@ -97,16 +102,18 @@ omega_BI_B = columnField(initial, "omega_BI_B_rad_s", "initial_conditions.omega_
 M_ext_B = columnField(environment, "external_torque_B_Nm", "environment.external_torque_B_Nm", 3);
 m_res_B = columnField(environment, "residual_magnetic_dipole_B_A_m2", ...
     "environment.residual_magnetic_dipole_B_A_m2", 3);
-sunModel = stringScalarField(sun, "model", "environment.sun.model");
-supportedSunModels = ["low_precision_analytic", "planet_ephemeris"];
-if ~any(sunModel == supportedSunModels)
-    error("AOCS:Config:UnsupportedSunModel", ...
-        "Unsupported environment.sun.model '%s'. Expected one of: %s.", ...
-        char(sunModel), strjoin(supportedSunModels, ", "));
-end
-solarConstant_W_m2 = scalarField(sun, "solar_constant_W_m2", ...
-    "environment.sun.solar_constant_W_m2", true);
+rmmEnabled = logicalScalarField(disturbances, ...
+    "residual_magnetic_moment_enabled", "environment.disturbances.residual_magnetic_moment_enabled");
+gravityGradientEnabled = logicalScalarField(disturbances, ...
+    "gravity_gradient_enabled", "environment.disturbances.gravity_gradient_enabled");
+sunConfig = readSunConfig(sun);
+srpConfig = readSrpConfig(srp);
 eclipseConfig = readEclipseConfig(eclipse);
+
+if eclipseConfig.Enabled && sunConfig.EphemerisModel ~= eclipseConfig.EphemerisModel
+    error("AOCS:Config:InconsistentEphemerisModel", ...
+        "environment.sun.ephemeris_model must match environment.eclipse.ephemeris_model when eclipse is enabled.");
+end
 
 AOCS = struct();
 AOCS.Meta.Schema = schema;
@@ -135,6 +142,8 @@ end
 
 AOCS.Epoch.Utc = epochUtc;
 AOCS.Epoch.TimeSystem = timeSystem;
+AOCS.Epoch.TdbMinusUtc_s = tdbMinusUtc_s;
+AOCS.Epoch.TdbJulianDate = epochTdbJd;
 
 AOCS.Orbit.CentralBody = centralBody;
 AOCS.Orbit.Propagator.Type = propagatorType;
@@ -151,8 +160,10 @@ AOCS.Initial.omega_BI_B = omega_BI_B;
 
 AOCS.Environment.M_ext_B = M_ext_B;
 AOCS.Environment.m_res_B = m_res_B;
-AOCS.Environment.Sun.Model = sunModel;
-AOCS.Environment.Sun.SolarConstant_W_m2 = solarConstant_W_m2;
+AOCS.Environment.RmmEnabled = rmmEnabled;
+AOCS.Environment.GravityGradientEnabled = gravityGradientEnabled;
+AOCS.Environment.Sun = sunConfig;
+AOCS.Environment.SRP = srpConfig;
 AOCS.Environment.Eclipse = eclipseConfig;
 
 AOCS.Numerics.QuatNormEpsilon = scalarField(numerics, "quat_norm_epsilon", "numerics.quat_norm_epsilon", true);
@@ -202,6 +213,7 @@ keplerian = AOCS.Orbit.InitialKeplerian;
 
 config = struct();
 config.epoch_utc = AOCS.Epoch.Utc;
+config.epoch_tdb_jd = AOCS.Epoch.TdbJulianDate;
 config.mu_m3_s2 = AOCS.Orbit.CentralBodyConstants.mu_m3_s2;
 config.central_body_radius_m = AOCS.Orbit.CentralBodyConstants.radius_m;
 config.semi_major_axis_m = keplerian.semi_major_axis_m;
@@ -224,9 +236,122 @@ function config = buildEnvironmentBusConfig(AOCS)
 %   config - Struct matching createAocsEnvironmentConfigBus element names.
 
 config = struct();
-config.M_ext_B = AOCS.Environment.M_ext_B;
+config.rmm_enabled = double(AOCS.Environment.RmmEnabled);
+config.gravity_gradient_enabled = double(AOCS.Environment.GravityGradientEnabled);
 config.m_res_B_A_m2 = AOCS.Environment.m_res_B;
 config.solar_constant_W_m2 = AOCS.Environment.Sun.SolarConstant_W_m2;
+config.eclipse_enabled = double(AOCS.Environment.Eclipse.Enabled);
+config.srp_enabled = double(AOCS.Environment.SRP.Enabled);
+config.srp_area_ref_m2 = AOCS.Environment.SRP.AreaRef_m2;
+config.srp_coefficient_reflectivity = AOCS.Environment.SRP.CoefficientReflectivity;
+config.srp_center_of_pressure_B_m = AOCS.Environment.SRP.CenterOfPressure_B_m;
+end
+
+function raw = readAocsConfigFile(configFile)
+% Description:
+%   Reads a JSON config and applies optional recursive overrides declared with
+%   a top-level "extends" field.
+%
+% Arguments:
+%   configFile - Path to a JSON config file.
+%
+% Outputs:
+%   raw - Fully merged raw config struct.
+
+configFile = string(configFile);
+raw = jsondecode(fileread(configFile));
+
+if isfield(raw, "extends")
+    baseFile = string(raw.extends);
+    if ~isfile(baseFile)
+        baseFile = fullfile(fileparts(configFile), baseFile);
+    end
+
+    raw = rmfield(raw, "extends");
+    raw = mergeConfigStructs(readAocsConfigFile(baseFile), raw);
+end
+end
+
+function merged = mergeConfigStructs(base, override)
+% Description:
+%   Recursively merges scalar JSON structs, with override values taking
+%   precedence over the base config.
+%
+% Arguments:
+%   base - Base decoded JSON struct.
+%   override - Override decoded JSON struct.
+%
+% Outputs:
+%   merged - Merged decoded JSON struct.
+
+merged = base;
+fields = fieldnames(override);
+
+for k = 1:numel(fields)
+    name = fields{k};
+    if isfield(merged, name) && isstruct(merged.(name)) && isstruct(override.(name)) ...
+            && isscalar(merged.(name)) && isscalar(override.(name))
+        merged.(name) = mergeConfigStructs(merged.(name), override.(name));
+    else
+        merged.(name) = override.(name);
+    end
+end
+end
+
+function config = readSunConfig(sun)
+% Description:
+%   Validates the project-level Sun ephemeris configuration used by the
+%   Aerospace Blockset Planetary Ephemeris block.
+%
+% Arguments:
+%   sun - JSON object from environment.sun.
+%
+% Outputs:
+%   config - Struct containing normalized Sun model settings.
+
+config = struct();
+config.Model = enumStringField(sun, "model", "environment.sun.model", "planet_ephemeris");
+config.EphemerisModel = enumStringField(sun, "ephemeris_model", ...
+    "environment.sun.ephemeris_model", ["DE405", "DE421", "DE423", "DE430", "DE432t"]);
+config.SolarConstant_W_m2 = scalarField(sun, "solar_constant_W_m2", ...
+    "environment.sun.solar_constant_W_m2", true);
+config.UseEphemerisDateRange = logicalScalarField(sun, ...
+    "use_ephemeris_date_range", "environment.sun.use_ephemeris_date_range");
+config.EphemerisStartUtc = columnField(sun, ...
+    "ephemeris_start_utc", "environment.sun.ephemeris_start_utc", 6);
+config.EphemerisEndUtc = columnField(sun, ...
+    "ephemeris_end_utc", "environment.sun.ephemeris_end_utc", 6);
+config.Action = enumStringField(sun, "action", "environment.sun.action", ...
+    ["Error", "Warning", "None"]);
+
+validateUtcEpoch(config.EphemerisStartUtc, "environment.sun.ephemeris_start_utc");
+validateUtcEpoch(config.EphemerisEndUtc, "environment.sun.ephemeris_end_utc");
+
+if utcSerialDay(config.EphemerisEndUtc) <= utcSerialDay(config.EphemerisStartUtc)
+    error("AOCS:Config:InvalidSunEphemerisRange", ...
+        "environment.sun.ephemeris_end_utc must be later than environment.sun.ephemeris_start_utc.");
+end
+end
+
+function config = readSrpConfig(srp)
+% Description:
+%   Validates the project-level solar radiation pressure disturbance model
+%   configuration.
+%
+% Arguments:
+%   srp - JSON object from environment.srp.
+%
+% Outputs:
+%   config - Struct containing normalized SRP settings.
+
+config = struct();
+config.Enabled = logicalScalarField(srp, "enabled", "environment.srp.enabled");
+config.Model = enumStringField(srp, "model", "environment.srp.model", "flat_plate_constant_area");
+config.AreaRef_m2 = scalarField(srp, "area_ref_m2", "environment.srp.area_ref_m2", true);
+config.CoefficientReflectivity = scalarField(srp, ...
+    "coefficient_reflectivity", "environment.srp.coefficient_reflectivity", true);
+config.CenterOfPressure_B_m = columnField(srp, ...
+    "center_of_pressure_B_m", "environment.srp.center_of_pressure_B_m", 3);
 end
 
 function config = readEclipseConfig(eclipse)
@@ -416,6 +541,22 @@ if mustBePositive && value <= 0
 end
 end
 
+function validateTdbMinusUtc(value)
+% Description:
+%   Guards the manually configured UTC->TDB epoch offset against unit mistakes.
+%
+% Arguments:
+%   value - TDB minus UTC offset [s].
+%
+% Outputs:
+%   None.
+
+if value < 0 || value > 200
+    error("AOCS:Config:InvalidTimeOffset", ...
+        "Config field epoch.tdb_minus_utc_s must be a plausible seconds offset in [0, 200].");
+end
+end
+
 function constants = centralBodyConstantsFor(centralBody)
 % Description:
 %   Resolves central-body constants used by orbit propagation and
@@ -550,6 +691,36 @@ function serialDay = utcSerialDay(epochUtc)
 %   serialDay - MATLAB serial day number.
 
 serialDay = datenum(epochUtc(:).');
+end
+
+function jd = calendarUtcToJulianDate(epochUtc)
+% Description:
+%   Converts a Gregorian UTC calendar vector to Julian date using arithmetic
+%   that does not depend on Aerospace Toolbox helper functions.
+%
+% Arguments:
+%   epochUtc - 6-by-1 UTC vector [year month day hour minute second]'.
+%
+% Outputs:
+%   jd - Julian date corresponding to the UTC calendar instant.
+
+year = floor(double(epochUtc(1)));
+month = floor(double(epochUtc(2)));
+day = floor(double(epochUtc(3)));
+
+if month <= 2
+    year = year - 1;
+    month = month + 12;
+end
+
+a = floor(year / 100.0);
+b = 2.0 - a + floor(a / 4.0);
+dayFraction = (double(epochUtc(4)) ...
+    + (double(epochUtc(5)) + double(epochUtc(6)) / 60.0) / 60.0) / 24.0;
+
+jd = floor(365.25 * (year + 4716.0)) ...
+    + floor(30.6001 * (month + 1.0)) ...
+    + day + dayFraction + b - 1524.5;
 end
 
 function dayCount = daysInMonth(year, month)

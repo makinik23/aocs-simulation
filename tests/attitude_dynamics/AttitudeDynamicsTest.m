@@ -362,21 +362,63 @@ function disableEnvironmentDisturbancesForTorqueFreeTest()
 % Outputs:
 %   None.
 
-if evalin("base", "exist('AOCS_OrbitConfig', 'var')")
-    AOCS_OrbitConfig = evalin("base", "AOCS_OrbitConfig");
-    orbitConfig = AOCS_OrbitConfig.Value;
-    orbitConfig.mu_m3_s2 = 0;
-    AOCS_OrbitConfig.Value = orbitConfig;
-    assignin("base", "AOCS_OrbitConfig", AOCS_OrbitConfig);
-end
-
 if evalin("base", "exist('AOCS_EnvironmentConfig', 'var')")
     AOCS_EnvironmentConfig = evalin("base", "AOCS_EnvironmentConfig");
     environmentConfig = AOCS_EnvironmentConfig.Value;
-    environmentConfig.M_ext_B = zeros(3, 1);
     environmentConfig.m_res_B_A_m2 = zeros(3, 1);
+    if isfield(environmentConfig, "rmm_enabled")
+        environmentConfig.rmm_enabled = 0;
+    end
+    if isfield(environmentConfig, "gravity_gradient_enabled")
+        environmentConfig.gravity_gradient_enabled = 0;
+    end
+    if isfield(environmentConfig, "srp_enabled")
+        environmentConfig.srp_enabled = 0;
+    end
     AOCS_EnvironmentConfig.Value = environmentConfig;
     assignin("base", "AOCS_EnvironmentConfig", AOCS_EnvironmentConfig);
+end
+
+if evalin("base", "exist('AOCS_Config', 'var')")
+    AOCS_Config = evalin("base", "AOCS_Config");
+    plantConfig = AOCS_Config.Value;
+    plantConfig.M_ext_B = zeros(3, 1);
+    AOCS_Config.Value = plantConfig;
+    assignin("base", "AOCS_Config", AOCS_Config);
+end
+
+if evalin("base", "exist('AOCS', 'var')")
+    AOCS = evalin("base", "AOCS");
+    if isfield(AOCS, "Config")
+        AOCS.Config.M_ext_B = zeros(3, 1);
+    end
+    if isfield(AOCS, "EnvironmentConfig")
+        AOCS.EnvironmentConfig.m_res_B_A_m2 = zeros(3, 1);
+        if isfield(AOCS.EnvironmentConfig, "rmm_enabled")
+            AOCS.EnvironmentConfig.rmm_enabled = 0;
+        end
+        if isfield(AOCS.EnvironmentConfig, "gravity_gradient_enabled")
+            AOCS.EnvironmentConfig.gravity_gradient_enabled = 0;
+        end
+        if isfield(AOCS.EnvironmentConfig, "srp_enabled")
+            AOCS.EnvironmentConfig.srp_enabled = 0;
+        end
+    end
+    if isfield(AOCS, "Environment")
+        if isfield(AOCS.Environment, "RmmEnabled")
+            AOCS.Environment.RmmEnabled = false;
+        end
+        if isfield(AOCS.Environment, "GravityGradientEnabled")
+            AOCS.Environment.GravityGradientEnabled = false;
+        end
+    end
+    if isfield(AOCS, "Environment") && isfield(AOCS.Environment, "SRP")
+        AOCS.Environment.SRP.Enabled = false;
+    end
+    if isfield(AOCS, "Environment") && isfield(AOCS.Environment, "M_ext_B")
+        AOCS.Environment.M_ext_B = zeros(3, 1);
+    end
+    assignin("base", "AOCS", AOCS);
 end
 end
 

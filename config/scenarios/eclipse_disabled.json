@@ -1,0 +1,15 @@
+{
+  "extends": "../AocsSimulationConfig.json",
+  "mission": {
+    "name": "leo_eclipse_disabled",
+    "description": "CubeSat attitude dynamics with Sun geometry and SRP, but eclipse shadowing disabled"
+  },
+  "results": {
+    "file": "aocs_eclipse_disabled.mat"
+  },
+  "environment": {
+    "eclipse": {
+      "enabled": false
+    }
+  }
+}

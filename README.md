@@ -8,7 +8,9 @@ The current model includes:
 - Keplerian orbit propagation,
 - Frame transformations,
 - IGRF-14 magnetic field model,
-- residual magnetic moment and gravity-gradient disturbance torques,
+- Planetary Ephemeris Sun vector from Aerospace Blockset,
+- residual magnetic moment, gravity-gradient, and SRP disturbance torques,
+- dual-cone eclipse modeling for shadowed solar flux,
 - validation tests and diagnostic plotting utilities.
 
 ## Quick Start
@@ -57,13 +59,27 @@ The source of truth is:
 config/AocsSimulationConfig.json
 ```
 
-It defines the simulation time span, solver settings, UTC epoch, initial
-Keplerian orbit, spacecraft inertia, initial attitude/rates, and environment
-parameters. The loader validates this file and creates the normalized `AOCS`
-struct used by Simulink setup and analysis:
+It defines the simulation time span, solver settings, UTC epoch and TDB offset,
+initial Keplerian orbit, spacecraft inertia, initial attitude/rates, and
+environment parameters. The loader validates this file and creates the normalized
+`AOCS` struct used by Simulink setup and analysis:
 
 ```text
 src/config/loadAocsSimulationConfig.m
+```
+
+Scenario configs can extend the default config with small overrides:
+
+```text
+config/scenarios/srp_disabled.json
+config/scenarios/no_disturbance_torques.json
+config/scenarios/eclipse_disabled.json
+```
+
+Example:
+
+```matlab
+run_aocs_simulation("config/scenarios/no_disturbance_torques.json")
 ```
 
 ## Simulink Setup
@@ -110,6 +126,7 @@ AOCS Simulation
 Detailed project documentation in `docs/`:
 
 - [Frame transformations and conventions](docs/transformations.md)
+- [Sun, eclipse, and SRP modeling](docs/sun_environment_modeling.md)
 
 ## Tests
 
@@ -125,20 +142,15 @@ Run orbit and environment regression tests:
 results = runtests("tests/orbit_and_environment");
 ```
 
-Convenience wrappers:
-
-```matlab
-run_attitude_dynamics_tests
-run_orbit_and_environment_tests
-```
-
 ## Repository Layout
 
 ```text
 config/
   AocsSimulationConfig.json
+  scenarios/
 docs/
   transformations.md
+  sun_environment_modeling.md
 models/
   aocs_plant.slx
 src/
@@ -153,6 +165,4 @@ run_aocs_simulation.m
 validate_aocs_results.m
 plot_attitude_results.m
 plot_orbit_environment_results.m
-plot_aocs_results.m
-startup.m
 ```
