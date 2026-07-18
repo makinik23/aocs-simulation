@@ -67,16 +67,16 @@ It accounts for the main effects required to describe Earth orientation, includi
 - Earth rotation determines the daily orientation of the Earth,
 - polar motion describes the movement of the rotation pole relative to the terrestrial crust.
 
-The current model does not provide measured Earth-orientation parameters from an external IERS data source. In particular, it does not explicitly supply:
+The current model supplies the high-accuracy IAU-2000/2006 Earth-orientation inputs through the `EnvironmentContext` bus:
 
 ```text
-deltaAT
-deltaUT1
-polar motion coordinates xp and yp
-celestial pole corrections dX and dY
+delta_at_s          TAI minus UTC [s]
+delta_ut1_s         UT1 minus UTC [s]
+polar_motion_rad    polar motion [xp yp] [rad]
+d_cip_rad           celestial intermediate pole correction [dX dY] [rad]
 ```
 
-This matter will be addressed in the future.
+`loadAocsSimulationConfig` resolves `deltaUT1`, polar motion, and dCIP from the configured `environment.earth_orientation.source` file, which defaults to MATLAB Aerospace Toolbox `aeroiersdata.mat`. `deltaAT` is derived from the configured `epoch.tdb_minus_utc_s` unless it is explicitly overridden. The Simulink `ECI Position to LLA` and standalone `Direction Cosine Matrix ECI to ECEF` blocks have their higher-accuracy ports enabled and are fed from this same context bus.
 
 ## Earth-Fixed Frame `ECEF`
 

@@ -1,168 +1,65 @@
 # CubeSat AOCS Simulator
+CubeSat Attitude and Orbit Control System simulation environment in MATLAB/Simulink. It ties
+together spacecraft attitude dynamics, celestial mechanics, orbit environmental models, and
+disturbance torques into one configurable system-level simulation.
 
-MATLAB/Simulink simulator for CubeSat Attitude and Orbit Control System.
+```text
+spacecraft:  3U CubeSat, 0.10 x 0.10 x 0.30 m
+mass:        3.71565 kg
+inertia:     diag([0.0409 0.0403 0.0073]) kg*m^2
+```
 
-The current model includes:
+## Core Capabilities
 
-- rigid-body attitude dynamics with quaternion kinematics,
-- Keplerian orbit propagation,
-- Frame transformations,
-- IGRF-14 magnetic field model,
-- Planetary Ephemeris Sun vector from Aerospace Blockset,
-- residual magnetic moment, gravity-gradient, and SRP disturbance torques,
-- dual-cone eclipse modeling for shadowed solar flux,
-- validation tests and diagnostic plotting utilities.
+- Rigid-body CubeSat attitude dynamics with quaternion state propagation.
+- Configurable orbital environment, from Kepler baseline to high-precision EGM2008.
+- Magnetic field, Sun vector, eclipse, SRP, gravity-gradient, and residual magnetic moment models.
+- Scenario-based configuration for repeatable mission and disturbance studies.
+- Validation and plotting tools for attitude, orbit, and environment products.
 
-## Quick Start
-
-Run the default simulation from MATLAB:
+## Run
 
 ```matlab
 run_aocs_simulation
-```
-
-Validate the latest result:
-
-```matlab
 validate_aocs_results
-```
-
-Plot attitude dynamics:
-
-```matlab
 plot_attitude_results
-```
-
-Plot orbit and environment products:
-
-```matlab
 plot_orbit_environment_results
 ```
 
-Export orbit/environment figures to PNG:
+Scenario examples:
 
 ```matlab
-plot_orbit_environment_results("", "results/orbit_plots")
-```
-
-The default result is saved to:
-
-```text
-results/aocs_simulation_results.mat
+run_aocs_simulation("config/scenarios/high_precision.json")
+run_aocs_simulation("config/scenarios/no_disturbance_torques.json")
 ```
 
 ## Configuration
 
-The source of truth is:
+The main config is `config/AocsSimulationConfig.json`, composed from:
 
 ```text
-config/AocsSimulationConfig.json
+config/simulation.json
+config/spacecraft_geometry.json
+config/orbit_environment.json
+config/dynamics.json
 ```
 
-It defines the simulation time span, solver settings, UTC epoch and TDB offset,
-initial Keplerian orbit, spacecraft inertia, initial attitude/rates, and
-environment parameters. The loader validates this file and creates the normalized
-`AOCS` struct used by Simulink setup and analysis:
-
-```text
-src/config/loadAocsSimulationConfig.m
-```
-
-Scenario configs can extend the default config with small overrides:
-
-```text
-config/scenarios/srp_disabled.json
-config/scenarios/no_disturbance_torques.json
-config/scenarios/eclipse_disabled.json
-```
-
-Example:
-
-```matlab
-run_aocs_simulation("config/scenarios/no_disturbance_torques.json")
-```
-
-## Simulink Setup
-
-The setup entrypoint is:
-
-```matlab
-AOCS = setupAocsSimulation("config/AocsSimulationConfig.json");
-```
-
-`setupAocsSimulation` creates the bus objects and `Simulink.Parameter` payloads
-in the MATLAB base workspace.
-
-`applyAocsSimulationSettings` then configures the Aerospace Blockset blocks
-from the validated config, including the 6DOF plant, Kepler propagator,
-ECI/LLA conversion, ECI/ECEF DCM, and IGRF.
-
-## Model Architecture
-
-The Simulink plant is:
-
-```text
-models/aocs_plant.slx
-```
-
-Top-level structure:
-
-```text
-AOCS Simulation
-├── Config constants
-├── Attitude Dynamics
-│   └── AOCS_StateBus
-├── Orbit & Environment
-│   ├── Orbit State & Geodetic Position
-│   ├── Sun Products
-│   ├── Eclipse Model
-│   ├── Environment Bus Assembly
-│   └── AOCS_EnvironmentBus
-└── Torque Sum
-```
-
-## Documentation
-
-Detailed project documentation in `docs/`:
-
-- [Frame transformations and conventions](docs/transformations.md)
-- [Sun, eclipse, and SRP modeling](docs/sun_environment_modeling.md)
+Scenarios in `config/scenarios/` override only what changes between experiments.
+For example, `high_precision.json` switches the Orbit Propagator to numerical
+high precision with EGM2008 spherical harmonics, degree 2159, EOP corrections,
+and ICRF output.
 
 ## Tests
 
-Run attitude-dynamics regression tests:
+Validation is moving to dedicated Simulink Test harnesses. Current harness-backed
+Swarm magnetic validation:
 
 ```matlab
-results = runtests("tests/attitude_dynamics");
+runtests("tests/orbit_and_environment/SwarmMagneticValidationTest.m")
 ```
 
-Run orbit and environment regression tests:
+Harness models live in `tests/harnesses/`.
 
-```matlab
-results = runtests("tests/orbit_and_environment");
-```
-
-## Repository Layout
-
-```text
-config/
-  AocsSimulationConfig.json
-  scenarios/
-docs/
-  transformations.md
-  sun_environment_modeling.md
-models/
-  aocs_plant.slx
-src/
-  analysis/
-  config/
-  environment/
-  simulink/
-tests/
-  attitude_dynamics/
-  orbit_and_environment/
-run_aocs_simulation.m
-validate_aocs_results.m
-plot_attitude_results.m
-plot_orbit_environment_results.m
-```
+More detail:
+[Frame transformations](docs/transformations.md) and
+[Sun, eclipse, and SRP modeling](docs/sun_environment_modeling.md).

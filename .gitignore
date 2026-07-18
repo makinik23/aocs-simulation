@@ -1,4 +1,3 @@
-# MATLAB/Simulink generated artifacts
 slprj/
 **/slprj/
 codegen/
@@ -18,12 +17,12 @@ codegen/
 *.sldd.autosave
 data/*.sldd
 
-# Local simulation and test outputs
 results/
 **/results/
 test-results/
 **/test-results/
 
-# OS/editor noise
 .DS_Store
 ._*
+
+esa_swarm/

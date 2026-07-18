@@ -1,0 +1,21 @@
+{
+  "extends": "../AocsSimulationConfig.json",
+  "mission": {
+    "name": "leo_high_precision",
+    "description": "CubeSat attitude dynamics with maximum-degree EGM2008 spherical-harmonics orbit propagation"
+  },
+  "results": {
+    "file": "aocs_high_precision.mat"
+  },
+  "orbit": {
+    "propagator": {
+      "type": "numerical_high_precision",
+      "output_frame": "ICRF",
+      "gravity_model": "Spherical Harmonics",
+      "earth_spherical_harmonics": "EGM2008",
+      "spherical_harmonics_degree": 2159,
+      "use_eops": true,
+      "eop_file": "aeroiersdata.mat"
+    }
+  }
+}

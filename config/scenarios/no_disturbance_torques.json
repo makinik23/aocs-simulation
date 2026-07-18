@@ -8,12 +8,7 @@
     "file": "aocs_no_disturbance_torques.mat"
   },
   "environment": {
-    "residual_magnetic_dipole_B_A_m2": [0.0, 0.0, 0.0],
     "disturbances": {
-      "residual_magnetic_moment_enabled": false,
-      "gravity_gradient_enabled": false
-    },
-    "srp": {
       "enabled": false
     }
   }

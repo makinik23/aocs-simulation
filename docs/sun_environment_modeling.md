@@ -183,11 +183,7 @@ Orbit propagation        unperturbed Keplerian
 
 ## Validation
 
-The relevant tests are:
-
-```text
-tests/orbit_and_environment/OrbitEnvironmentTest.m
-```
-
-They check Sun-vector consistency, raw and shadowed flux, eclipse-disabled
-bypass behavior, SRP torque calculation, disturbance-torque summation.
+The old monolithic `OrbitEnvironmentTest.m` suite has been retired while
+validation is being moved to dedicated Simulink Test harnesses. Rebuild these
+checks as subsystem harness tests for Sun vector, eclipse, SRP, and disturbance
+torque paths.
