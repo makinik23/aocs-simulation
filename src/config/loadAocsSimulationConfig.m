@@ -42,6 +42,7 @@ orbit = requireStruct(raw, "orbit", "orbit");
 propagator = requireStruct(orbit, "propagator", "orbit.propagator");
 initialKeplerian = requireStruct(orbit, "initial_keplerian", "orbit.initial_keplerian");
 spacecraft = requireStruct(raw, "spacecraft", "spacecraft");
+spacecraftGeometry = requireStruct(spacecraft, "geometry", "spacecraft.geometry");
 massProps = requireStruct(spacecraft, "mass_properties", "spacecraft.mass_properties");
 initial = requireStruct(raw, "initial_conditions", "initial_conditions");
 environment = requireStruct(raw, "environment", "environment");
@@ -49,6 +50,7 @@ disturbances = requireStruct(environment, "disturbances", "environment.disturban
 sun = requireStruct(environment, "sun", "environment.sun");
 srp = requireStruct(environment, "srp", "environment.srp");
 eclipse = requireStruct(environment, "eclipse", "environment.eclipse");
+earthOrientation = optionalStructField(environment, "earth_orientation");
 numerics = requireStruct(raw, "numerics", "numerics");
 conventions = requireStruct(raw, "conventions", "conventions");
 
@@ -66,21 +68,13 @@ epochTdbJd = calendarUtcToJulianDate(epochUtc) + tdbMinusUtc_s / 86400.0;
 centralBody = stringScalarField(orbit, "central_body", "orbit.central_body");
 centralBodyConstants = centralBodyConstantsFor(centralBody);
 
-propagatorType = stringScalarField(propagator, "type", "orbit.propagator.type");
-if propagatorType ~= "kepler_unperturbed"
-    error("AOCS:Config:UnsupportedOrbitPropagator", ...
-        "Unsupported orbit.propagator.type '%s'. Expected 'kepler_unperturbed'.", char(propagatorType));
-end
-
-outputFrame = stringScalarField(propagator, "output_frame", "orbit.propagator.output_frame");
-if outputFrame ~= "ICRF"
-    error("AOCS:Config:UnsupportedOrbitFrame", ...
-        "Unsupported orbit.propagator.output_frame '%s'. Expected 'ICRF'.", char(outputFrame));
-end
+propagatorConfig = readOrbitPropagatorConfig(propagator);
 
 keplerian = readKeplerianElements(initialKeplerian);
 validateOrbitGeometry(keplerian, centralBodyConstants.radius_m);
 
+dimensions_m = columnField(spacecraftGeometry, "dimensions_m", "spacecraft.geometry.dimensions_m", 3);
+mass_kg = scalarField(massProps, "mass_kg", "spacecraft.mass_properties.mass_kg", true);
 I_B = matrixField(massProps, "inertia_B_kg_m2", "spacecraft.mass_properties.inertia_B_kg_m2", 3, 3);
 if any(any(abs(I_B - I_B.') > 1e-12))
     error("AOCS:Config:InvalidInertia", "Inertia matrix I_B must be symmetric.");
@@ -102,13 +96,21 @@ omega_BI_B = columnField(initial, "omega_BI_B_rad_s", "initial_conditions.omega_
 M_ext_B = columnField(environment, "external_torque_B_Nm", "environment.external_torque_B_Nm", 3);
 m_res_B = columnField(environment, "residual_magnetic_dipole_B_A_m2", ...
     "environment.residual_magnetic_dipole_B_A_m2", 3);
-rmmEnabled = logicalScalarField(disturbances, ...
+disturbancesEnabled = optionalLogicalScalarField(disturbances, ...
+    "enabled", "environment.disturbances.enabled", true);
+rmmEnabled = disturbancesEnabled && logicalScalarField(disturbances, ...
     "residual_magnetic_moment_enabled", "environment.disturbances.residual_magnetic_moment_enabled");
-gravityGradientEnabled = logicalScalarField(disturbances, ...
+gravityGradientEnabled = disturbancesEnabled && logicalScalarField(disturbances, ...
     "gravity_gradient_enabled", "environment.disturbances.gravity_gradient_enabled");
 sunConfig = readSunConfig(sun);
+earthOrientationConfig = readEarthOrientationConfig(earthOrientation, epochUtc, tdbMinusUtc_s);
 srpConfig = readSrpConfig(srp);
+srpConfig.Enabled = disturbancesEnabled && srpConfig.Enabled;
 eclipseConfig = readEclipseConfig(eclipse);
+
+if ~disturbancesEnabled
+    M_ext_B = zeros(3, 1);
+end
 
 if eclipseConfig.Enabled && sunConfig.EphemerisModel ~= eclipseConfig.EphemerisModel
     error("AOCS:Config:InconsistentEphemerisModel", ...
@@ -146,12 +148,13 @@ AOCS.Epoch.TdbMinusUtc_s = tdbMinusUtc_s;
 AOCS.Epoch.TdbJulianDate = epochTdbJd;
 
 AOCS.Orbit.CentralBody = centralBody;
-AOCS.Orbit.Propagator.Type = propagatorType;
-AOCS.Orbit.Propagator.OutputFrame = outputFrame;
+AOCS.Orbit.Propagator = propagatorConfig;
 AOCS.Orbit.CentralBodyConstants = centralBodyConstants;
 AOCS.Orbit.InitialKeplerian = keplerian;
 
 AOCS.Spacecraft.Id = string(requireField(spacecraft, "id", "spacecraft.id"));
+AOCS.Spacecraft.Dimensions_m = dimensions_m;
+AOCS.Spacecraft.Mass_kg = mass_kg;
 AOCS.Spacecraft.I_B = I_B;
 
 AOCS.Initial.q_BI = q_BI;
@@ -160,9 +163,11 @@ AOCS.Initial.omega_BI_B = omega_BI_B;
 
 AOCS.Environment.M_ext_B = M_ext_B;
 AOCS.Environment.m_res_B = m_res_B;
+AOCS.Environment.DisturbancesEnabled = disturbancesEnabled;
 AOCS.Environment.RmmEnabled = rmmEnabled;
 AOCS.Environment.GravityGradientEnabled = gravityGradientEnabled;
 AOCS.Environment.Sun = sunConfig;
+AOCS.Environment.EarthOrientation = earthOrientationConfig;
 AOCS.Environment.SRP = srpConfig;
 AOCS.Environment.Eclipse = eclipseConfig;
 
@@ -224,6 +229,50 @@ config.argument_of_periapsis_rad = keplerian.argument_of_periapsis_rad;
 config.true_anomaly_rad = keplerian.true_anomaly_rad;
 end
 
+function config = readOrbitPropagatorConfig(propagator)
+% Description:
+%   Validates orbit.propagator and maps project-level choices to Simulink
+%   Orbit Propagator mask values.
+%
+% Arguments:
+%   propagator - JSON object from orbit.propagator.
+%
+% Outputs:
+%   config - Struct containing normalized propagator settings.
+
+propagatorType = enumStringField(propagator, "type", "orbit.propagator.type", ...
+    ["kepler_unperturbed", "numerical_high_precision", "high_precision"]);
+if propagatorType == "high_precision"
+    propagatorType = "numerical_high_precision";
+end
+
+outputFrame = enumStringField(propagator, "output_frame", "orbit.propagator.output_frame", "ICRF");
+
+config = struct();
+config.Type = propagatorType;
+config.OutputFrame = outputFrame;
+
+switch propagatorType
+    case "kepler_unperturbed"
+        config.MaskPropagator = "Kepler (unperturbed)";
+        config.StateFormatParameter = "stateFormatKep";
+    case "numerical_high_precision"
+        config.MaskPropagator = "Numerical (high precision)";
+        config.StateFormatParameter = "stateFormatNum";
+        config.GravityModel = optionalEnumStringField(propagator, "gravity_model", ...
+            "orbit.propagator.gravity_model", "Spherical Harmonics", "Spherical Harmonics");
+        config.UseEOPs = optionalLogicalScalarField(propagator, ...
+            "use_eops", "orbit.propagator.use_eops", true);
+        config.EarthSphericalHarmonics = optionalEnumStringField(propagator, ...
+            "earth_spherical_harmonics", "orbit.propagator.earth_spherical_harmonics", ...
+            "EGM2008", "EGM2008");
+        config.SphericalHarmonicsDegree = optionalScalarField(propagator, ...
+            "spherical_harmonics_degree", "orbit.propagator.spherical_harmonics_degree", 2159, true);
+        config.EOPFile = optionalStringScalarField(propagator, ...
+            "eop_file", "orbit.propagator.eop_file", "aeroiersdata.mat");
+end
+end
+
 function config = buildEnvironmentBusConfig(AOCS)
 % Description:
 %   Selects numeric environment/disturbance values for orbit/environment
@@ -250,7 +299,9 @@ end
 function raw = readAocsConfigFile(configFile)
 % Description:
 %   Reads a JSON config and applies optional recursive overrides declared with
-%   a top-level "extends" field.
+%   a top-level "extends" field. The field can be one file or an ordered list
+%   of files; later files override earlier files, and the current file then
+%   overrides the merged base.
 %
 % Arguments:
 %   configFile - Path to a JSON config file.
@@ -262,13 +313,56 @@ configFile = string(configFile);
 raw = jsondecode(fileread(configFile));
 
 if isfield(raw, "extends")
-    baseFile = string(raw.extends);
-    if ~isfile(baseFile)
-        baseFile = fullfile(fileparts(configFile), baseFile);
+    baseFiles = configExtendsList(raw.extends, configFile);
+    raw = rmfield(raw, "extends");
+
+    merged = struct();
+    for k = 1:numel(baseFiles)
+        merged = mergeConfigStructs(merged, readAocsConfigFile(baseFiles(k)));
     end
 
-    raw = rmfield(raw, "extends");
-    raw = mergeConfigStructs(readAocsConfigFile(baseFile), raw);
+    raw = mergeConfigStructs(merged, raw);
+end
+end
+
+function files = configExtendsList(extendsValue, configFile)
+% Description:
+%   Normalizes the top-level extends field to resolved config file paths.
+%
+% Arguments:
+%   extendsValue - String or JSON string array decoded by jsondecode.
+%   configFile - Path to the file declaring the extends field.
+%
+% Outputs:
+%   files - String column vector of resolved file paths.
+
+if ischar(extendsValue) || (isstring(extendsValue) && isscalar(extendsValue))
+    files = string(extendsValue);
+elseif isstring(extendsValue)
+    files = extendsValue(:);
+elseif iscell(extendsValue)
+    files = strings(numel(extendsValue), 1);
+    for k = 1:numel(extendsValue)
+        item = extendsValue{k};
+        if ~(ischar(item) || (isstring(item) && isscalar(item)))
+            error("AOCS:Config:InvalidExtends", ...
+                "Config extends entries must be scalar strings: %s", char(configFile));
+        end
+        files(k) = string(item);
+    end
+else
+    error("AOCS:Config:InvalidExtends", ...
+        "Config extends must be a scalar string or string array: %s", char(configFile));
+end
+
+for k = 1:numel(files)
+    if ~isfile(files(k))
+        files(k) = fullfile(fileparts(configFile), files(k));
+    end
+
+    if ~isfile(files(k))
+        error("AOCS:Config:MissingFile", "AOCS extended config file not found: %s", files(k));
+    end
 end
 end
 
@@ -331,6 +425,57 @@ if utcSerialDay(config.EphemerisEndUtc) <= utcSerialDay(config.EphemerisStartUtc
     error("AOCS:Config:InvalidSunEphemerisRange", ...
         "environment.sun.ephemeris_end_utc must be later than environment.sun.ephemeris_start_utc.");
 end
+end
+
+
+function config = readEarthOrientationConfig(earthOrientation, epochUtc, tdbMinusUtc_s)
+% Description:
+%   Reads Earth orientation settings and resolves the EOP values used by
+%   high-accuracy IAU-2000/2006 ECI/ECEF transformations.
+%
+% Arguments:
+%   earthOrientation - Optional JSON object from environment.earth_orientation.
+%   epochUtc - Validated UTC epoch vector [year month day hour minute second]'.
+%   tdbMinusUtc_s - Configured TDB minus UTC offset [s].
+%
+% Outputs:
+%   config - Struct with scalar/vector EOP values in SI/radian units.
+
+if isempty(earthOrientation)
+    earthOrientation = struct();
+end
+
+config = struct();
+config.Enabled = optionalLogicalScalarField(earthOrientation, ...
+    "enabled", "environment.earth_orientation.enabled", true);
+config.Source = optionalStringScalarField(earthOrientation, ...
+    "source", "environment.earth_orientation.source", "aeroiersdata.mat");
+config.Action = optionalEnumStringField(earthOrientation, ...
+    "action", "environment.earth_orientation.action", ["None", "Warning", "Error"], "Warning");
+config.DeltaAT_s = optionalScalarField(earthOrientation, ...
+    "delta_at_s", "environment.earth_orientation.delta_at_s", tdbMinusUtc_s - 32.184, false);
+
+if config.DeltaAT_s < 0 || config.DeltaAT_s > 100
+    error("AOCS:Config:InvalidEarthOrientation", ...
+        "environment.earth_orientation.delta_at_s must be a plausible TAI-UTC offset in [0, 100] seconds.");
+end
+
+if config.Enabled
+    mjd = mjuliandate(epochUtc(:).');
+    source = char(config.Source);
+    action = char(config.Action);
+    config.DeltaUT1_s = deltaUT1(mjd, "Source", source, "Action", action);
+    config.PolarMotion_rad = polarMotion(mjd, "Source", source, "Action", action);
+    config.DCIP_rad = deltaCIP(mjd, "Source", source, "Action", action);
+else
+    config.DeltaUT1_s = 0.0;
+    config.PolarMotion_rad = [0.0, 0.0];
+    config.DCIP_rad = [0.0, 0.0];
+end
+
+config.DeltaUT1_s = double(config.DeltaUT1_s(1));
+config.PolarMotion_rad = reshape(double(config.PolarMotion_rad(1, :)), 1, 2);
+config.DCIP_rad = reshape(double(config.DCIP_rad(1, :)), 1, 2);
 end
 
 function config = readSrpConfig(srp)
@@ -411,6 +556,22 @@ function section = requireStruct(parent, fieldName, displayName)
 section = requireField(parent, fieldName, displayName);
 if ~isstruct(section)
     error("AOCS:Config:InvalidField", "Config field %s must be an object.", displayName);
+end
+end
+
+
+function section = optionalStructField(parent, fieldName)
+% Description:
+%   Reads an optional JSON object and returns [] when the field is absent.
+
+fieldName = char(fieldName);
+if isstruct(parent) && isfield(parent, fieldName)
+    section = parent.(fieldName);
+    if ~isstruct(section) || ~isscalar(section)
+        error("AOCS:Config:InvalidField", "Config field %s must be an object.", fieldName);
+    end
+else
+    section = [];
 end
 end
 
@@ -496,6 +657,54 @@ if ~any(value == allowedValues)
     error("AOCS:Config:InvalidField", ...
         "Unsupported config field %s '%s'. Expected one of: %s.", ...
         displayName, char(value), strjoin(allowedValues, ", "));
+end
+end
+
+function value = optionalStringScalarField(parent, fieldName, displayName, defaultValue)
+% Description:
+%   Reads an optional JSON string with a scalar string default.
+
+fieldName = char(fieldName);
+if isstruct(parent) && isfield(parent, fieldName)
+    value = stringScalarField(parent, fieldName, displayName);
+else
+    value = string(defaultValue);
+end
+end
+
+function value = optionalEnumStringField(parent, fieldName, displayName, allowedValues, defaultValue)
+% Description:
+%   Reads an optional string field and constrains it to an allowed set.
+
+fieldName = char(fieldName);
+if isstruct(parent) && isfield(parent, fieldName)
+    value = enumStringField(parent, fieldName, displayName, allowedValues);
+else
+    value = string(defaultValue);
+end
+end
+
+function value = optionalLogicalScalarField(parent, fieldName, displayName, defaultValue)
+% Description:
+%   Reads an optional JSON boolean with a scalar logical default.
+
+fieldName = char(fieldName);
+if isstruct(parent) && isfield(parent, fieldName)
+    value = logicalScalarField(parent, fieldName, displayName);
+else
+    value = defaultValue;
+end
+end
+
+function value = optionalScalarField(parent, fieldName, displayName, defaultValue, mustBePositive)
+% Description:
+%   Reads an optional scalar numeric field with a numeric default.
+
+fieldName = char(fieldName);
+if isstruct(parent) && isfield(parent, fieldName)
+    value = scalarField(parent, fieldName, displayName, mustBePositive);
+else
+    value = defaultValue;
 end
 end
 

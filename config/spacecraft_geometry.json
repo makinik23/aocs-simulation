@@ -1,0 +1,32 @@
+{
+  "spacecraft": {
+    "id": "cubesat_3u",
+    "mass_properties": {
+      "inertia_B_kg_m2": [
+        [
+          0.0409,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0403,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0073
+        ]
+      ],
+      "mass_kg": 3.71565
+    },
+    "geometry": {
+      "dimensions_m": [
+        0.1,
+        0.1,
+        0.3
+      ]
+    }
+  }
+}

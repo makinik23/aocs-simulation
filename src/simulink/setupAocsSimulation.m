@@ -25,6 +25,12 @@ createAocsOrbitConfigBus("base");
 createAocsEnvironmentConfigBus("base");
 createAocsStateBus("base");
 createAocsOrbitStateBus("base");
+createAocsEnvironmentContextBus("base");
+createAocsMagneticFieldBus("base");
+createAocsSunBus("base");
+createAocsIlluminationBus("base");
+createAocsSrpBus("base");
+createAocsDisturbanceBus("base");
 createAocsEnvironmentBus("base");
 
 AOCS_Config = Simulink.Parameter(AOCS.Config);

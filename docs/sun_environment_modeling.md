@@ -183,11 +183,6 @@ Orbit propagation        unperturbed Keplerian
 
 ## Validation
 
-The relevant tests are:
-
-```text
-tests/orbit_and_environment/OrbitEnvironmentTest.m
-```
-
-They check Sun-vector consistency, raw and shadowed flux, eclipse-disabled
-bypass behavior, SRP torque calculation, disturbance-torque summation.
+Environment validation is organized around dedicated Simulink harness tests.
+Real-data fixtures and download/reference-generation scripts live under
+`validation/`, while harness models live in `tests/harnesses/`.

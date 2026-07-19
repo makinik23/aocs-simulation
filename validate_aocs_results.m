@@ -1,8 +1,10 @@
 function report = validate_aocs_results(resultsFile)
 % Description:
-%   Loads the latest simulation result, extracts body rates from the logged
-%   AOCS state, reports rotational energy and angular momentum norm drift, and
-%   applies strict conservation checks only for torque-free simulations.
+%   Runs a local dynamics sanity check on saved simulation results. The function
+%   extracts body rates from the logged AOCS state, reports rotational energy
+%   and angular momentum norm drift, and applies strict conservation checks only
+%   for torque-free simulations. Flight-data validation lives in Simulink
+%   harness tests under tests/.
 %
 % Arguments:
 %   resultsFile - Optional MAT-file containing simulation output variable out.
@@ -40,7 +42,7 @@ energyError = max(abs(invariants.E_rot - invariants.E_rot(1)));
 momentumError = max(abs(invariants.H_norm - invariants.H_norm(1)));
 
 fprintf("\n");
-fprintf("Validation source : %s.omega_b + configured I_B\n", char(state.Source));
+fprintf("Diagnostic source : %s.omega_b + configured I_B\n", char(state.Source));
 fprintf("Energy drift      : %.3e\n", energyError);
 fprintf("Momentum drift    : %.3e\n", momentumError);
 fprintf("Max disturbance   : %.3e N*m\n", maxDisturbanceTorque);
