@@ -183,7 +183,6 @@ Orbit propagation        unperturbed Keplerian
 
 ## Validation
 
-The old monolithic `OrbitEnvironmentTest.m` suite has been retired while
-validation is being moved to dedicated Simulink Test harnesses. Rebuild these
-checks as subsystem harness tests for Sun vector, eclipse, SRP, and disturbance
-torque paths.
+Environment validation is organized around dedicated Simulink harness tests.
+Real-data fixtures and download/reference-generation scripts live under
+`validation/`, while harness models live in `tests/harnesses/`.

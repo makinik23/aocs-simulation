@@ -3,9 +3,9 @@
   <Harness>
     <P Name="Name">SwarmGeomagneticHarness</P>
     <P Name="Description"/>
-    <P Name="CreatedBy">juliankazmierski</P>
+    <P Name="CreatedBy">aocs-simulation</P>
     <P Name="CreatedOn">Sat Jul 18 22:50:54 2026</P>
-    <P Name="ModifiedBy">juliankazmierski</P>
+    <P Name="ModifiedBy">aocs-simulation</P>
     <P Name="LastSaved">Sat Jul 18 22:51:07 2026</P>
     <P Name="Owner">170</P>
     <P Name="OwnerType">SS_HARNESS</P>

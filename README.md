@@ -1,29 +1,26 @@
 # CubeSat AOCS Simulator
 CubeSat Attitude and Orbit Control System simulation environment in MATLAB/Simulink. It ties
-together spacecraft attitude dynamics, celestial mechanics, orbit environmental models, and
-disturbance torques into one configurable system-level simulation.
-
-```text
-spacecraft:  3U CubeSat, 0.10 x 0.10 x 0.30 m
-mass:        3.71565 kg
-inertia:     diag([0.0409 0.0403 0.0073]) kg*m^2
-```
+together flight dynamics simulation and GNC algorithms.
 
 ## Core Capabilities
 
-- Rigid-body CubeSat attitude dynamics with quaternion state propagation.
-- Configurable orbital environment, from Kepler baseline to high-precision EGM2008.
-- Magnetic field, Sun vector, eclipse, SRP, gravity-gradient, and residual magnetic moment models.
-- Scenario-based configuration for repeatable mission and disturbance studies.
-- Validation and plotting tools for attitude, orbit, and environment products.
+- Configurable orbit and environment pipeline.
+- Scenario-driven configuration for repeatable mission cases and disturbance studies.
+- Model validation against real flight data: Sentinel-1A POD for ECI/ECEF transformations and Swarm A MAG/VirES for geomagnetic field output.
+- Post-processing utilities for simulation diagnostics.
 
 ## Run
 
 ```matlab
 run_aocs_simulation
-validate_aocs_results
 plot_attitude_results
 plot_orbit_environment_results
+```
+
+Optional local dynamics sanity check:
+
+```matlab
+validate_aocs_results
 ```
 
 Scenario examples:
@@ -45,19 +42,24 @@ config/dynamics.json
 ```
 
 Scenarios in `config/scenarios/` override only what changes between experiments.
-For example, `high_precision.json` switches the Orbit Propagator to numerical
-high precision with EGM2008 spherical harmonics, degree 2159, EOP corrections,
-and ICRF output.
+For example, `high_precision.json` switches the Orbit Propagator from unperturbed to numerical
+high precision.
 
 ## Tests
 
-Validation is moving to dedicated Simulink Test harnesses. Current harness-backed
-Swarm magnetic validation:
+Model validation is based on dedicated Simulink harnesses and real flight data. The
+ECI/ECEF transformation harness is checked against Sentinel-1A precise orbit
+products with an independent ERFA/SOFA reference.
+The geomagnetic environment harness is checked against Swarm A MAG Level-1B data
+from VirES, including the onboard magnetic-field measurements and VirES IGRF
+reference.
 
 ```matlab
+runtests("tests/transformations")
 runtests("tests/orbit_and_environment/SwarmMagneticValidationTest.m")
 ```
 
+Validation data and download/reference-generation scripts live in `validation/`.
 Harness models live in `tests/harnesses/`.
 
 More detail:
