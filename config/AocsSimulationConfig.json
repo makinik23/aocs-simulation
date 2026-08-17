@@ -8,7 +8,7 @@
   ],
   "mission": {
     "name": "leo_orbit_environment_disturbed_rigid_body",
-    "description": "CubeSat attitude dynamics with Kepler orbit, IGRF magnetic field, eclipse, RMM, gravity-gradient, and SRP disturbance torques"
+    "description": "Coupled 3U CubeSat attitude and numerical orbit dynamics with DTM2020, multispecies Sentman aerodynamics, IGRF, eclipse, RMM, gravity-gradient, and SRP"
   },
   "models": {
     "plant": "aocs_plant",

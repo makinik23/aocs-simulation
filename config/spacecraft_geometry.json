@@ -27,6 +27,31 @@
         0.1,
         0.3
       ]
+    },
+    "aerodynamics": {
+      "enabled": true,
+      "model": "sentman_multispecies",
+      "center_of_mass_from_geometric_center_B_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "wall_temperature_K": [
+        300.0,
+        300.0,
+        300.0,
+        300.0,
+        300.0,
+        300.0
+      ],
+      "energy_accommodation_coefficient": [
+        0.9,
+        0.9,
+        0.9,
+        0.9,
+        0.9,
+        0.9
+      ]
     }
   }
 }

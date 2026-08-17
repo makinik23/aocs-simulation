@@ -19,6 +19,18 @@ addpath(fullfile(projectRoot, "src", "config"));
 addpath(fullfile(projectRoot, "src", "simulink"));
 addpath(fullfile(projectRoot, "src", "environment"));
 
+nativeBuildDirectory = fullfile(projectRoot, "build", "native", ...
+    "dtm2020", computer("arch"));
+nativeSFunction = fullfile(nativeBuildDirectory, "dtm2020_sfun." + mexext);
+if ~isfile(nativeSFunction)
+    addpath(fullfile(projectRoot, "tools"));
+    nativeArtifacts = buildDtm2020Native();
+    nativeBuildDirectory = nativeArtifacts.BuildDirectory;
+end
+addpath(nativeBuildDirectory);
+AOCS_DTM2020_CoefficientFile = char(fullfile(projectRoot, "third_party", ...
+    "dtm2020", "upstream", "data", "DTM_2020_F107_Kp.dat"));
+
 AOCS = loadAocsSimulationConfig(configFile, projectRoot);
 createAocsConfigBus("base");
 createAocsOrbitConfigBus("base");
@@ -26,6 +38,7 @@ createAocsEnvironmentConfigBus("base");
 createAocsStateBus("base");
 createAocsOrbitStateBus("base");
 createAocsEnvironmentContextBus("base");
+createAocsAtmosphereBus("base");
 createAocsMagneticFieldBus("base");
 createAocsSunBus("base");
 createAocsIlluminationBus("base");
@@ -52,4 +65,5 @@ assignin("base", "AOCS", AOCS);
 assignin("base", "AOCS_Config", AOCS_Config);
 assignin("base", "AOCS_OrbitConfig", AOCS_OrbitConfig);
 assignin("base", "AOCS_EnvironmentConfig", AOCS_EnvironmentConfig);
+assignin("base", "AOCS_DTM2020_CoefficientFile", AOCS_DTM2020_CoefficientFile);
 end
