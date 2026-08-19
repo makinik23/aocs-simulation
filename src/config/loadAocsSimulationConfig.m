@@ -43,6 +43,7 @@ propagator = requireStruct(orbit, "propagator", "orbit.propagator");
 initialKeplerian = requireStruct(orbit, "initial_keplerian", "orbit.initial_keplerian");
 spacecraft = requireStruct(raw, "spacecraft", "spacecraft");
 spacecraftGeometry = requireStruct(spacecraft, "geometry", "spacecraft.geometry");
+aerodynamics = requireStruct(spacecraft, "aerodynamics", "spacecraft.aerodynamics");
 massProps = requireStruct(spacecraft, "mass_properties", "spacecraft.mass_properties");
 initial = requireStruct(raw, "initial_conditions", "initial_conditions");
 environment = requireStruct(raw, "environment", "environment");
@@ -51,6 +52,7 @@ sun = requireStruct(environment, "sun", "environment.sun");
 srp = requireStruct(environment, "srp", "environment.srp");
 eclipse = requireStruct(environment, "eclipse", "environment.eclipse");
 earthOrientation = optionalStructField(environment, "earth_orientation");
+atmosphere = requireStruct(environment, "atmosphere", "environment.atmosphere");
 numerics = requireStruct(raw, "numerics", "numerics");
 conventions = requireStruct(raw, "conventions", "conventions");
 
@@ -74,6 +76,10 @@ keplerian = readKeplerianElements(initialKeplerian);
 validateOrbitGeometry(keplerian, centralBodyConstants.radius_m);
 
 dimensions_m = columnField(spacecraftGeometry, "dimensions_m", "spacecraft.geometry.dimensions_m", 3);
+if any(dimensions_m <= 0.0)
+    error("AOCS:Config:InvalidGeometry", ...
+        "spacecraft.geometry.dimensions_m entries must be positive.");
+end
 mass_kg = scalarField(massProps, "mass_kg", "spacecraft.mass_properties.mass_kg", true);
 I_B = matrixField(massProps, "inertia_B_kg_m2", "spacecraft.mass_properties.inertia_B_kg_m2", 3, 3);
 if any(any(abs(I_B - I_B.') > 1e-12))
@@ -104,6 +110,10 @@ gravityGradientEnabled = disturbancesEnabled && logicalScalarField(disturbances,
     "gravity_gradient_enabled", "environment.disturbances.gravity_gradient_enabled");
 sunConfig = readSunConfig(sun);
 earthOrientationConfig = readEarthOrientationConfig(earthOrientation, epochUtc, tdbMinusUtc_s);
+atmosphereConfig = readAtmosphereConfig(atmosphere);
+aerodynamicsConfig = readAerodynamicsConfig(aerodynamics, dimensions_m);
+aerodynamicsConfig.Enabled = disturbancesEnabled && atmosphereConfig.Enabled && ...
+    aerodynamicsConfig.Enabled;
 srpConfig = readSrpConfig(srp);
 srpConfig.Enabled = disturbancesEnabled && srpConfig.Enabled;
 eclipseConfig = readEclipseConfig(eclipse);
@@ -156,6 +166,7 @@ AOCS.Spacecraft.Id = string(requireField(spacecraft, "id", "spacecraft.id"));
 AOCS.Spacecraft.Dimensions_m = dimensions_m;
 AOCS.Spacecraft.Mass_kg = mass_kg;
 AOCS.Spacecraft.I_B = I_B;
+AOCS.Spacecraft.Aerodynamics = aerodynamicsConfig;
 
 AOCS.Initial.q_BI = q_BI;
 AOCS.Initial.euler_BI_0_rad = euler_BI_0_rad;
@@ -168,6 +179,7 @@ AOCS.Environment.RmmEnabled = rmmEnabled;
 AOCS.Environment.GravityGradientEnabled = gravityGradientEnabled;
 AOCS.Environment.Sun = sunConfig;
 AOCS.Environment.EarthOrientation = earthOrientationConfig;
+AOCS.Environment.Atmosphere = atmosphereConfig;
 AOCS.Environment.SRP = srpConfig;
 AOCS.Environment.Eclipse = eclipseConfig;
 
@@ -201,6 +213,14 @@ config.I_B = AOCS.Spacecraft.I_B;
 config.euler_BI_0_rad = AOCS.Initial.euler_BI_0_rad;
 config.omega_BI_B_0 = AOCS.Initial.omega_BI_B;
 config.M_ext_B = AOCS.Environment.M_ext_B;
+config.mass_kg = AOCS.Spacecraft.Mass_kg;
+config.aero_enabled = double(AOCS.Spacecraft.Aerodynamics.Enabled);
+config.aero_panel_normals_B = AOCS.Spacecraft.Aerodynamics.PanelNormals_B;
+config.aero_panel_areas_m2 = AOCS.Spacecraft.Aerodynamics.PanelAreas_m2;
+config.aero_panel_centers_B_m = AOCS.Spacecraft.Aerodynamics.PanelCenters_B_m;
+config.aero_wall_temperature_K = AOCS.Spacecraft.Aerodynamics.WallTemperature_K;
+config.aero_energy_accommodation = ...
+    AOCS.Spacecraft.Aerodynamics.EnergyAccommodationCoefficient;
 end
 
 function config = buildOrbitBusConfig(AOCS)
@@ -259,10 +279,15 @@ switch propagatorType
     case "numerical_high_precision"
         config.MaskPropagator = "Numerical (high precision)";
         config.StateFormatParameter = "stateFormatNum";
-        config.GravityModel = optionalEnumStringField(propagator, "gravity_model", ...
+        configuredGravityModel = optionalEnumStringField(propagator, "gravity_model", ...
             "orbit.propagator.gravity_model", "Spherical Harmonics", "Spherical Harmonics");
+        if configuredGravityModel == "Spherical Harmonics"
+            config.GravityModel = "Spherical harmonics";
+        end
         config.UseEOPs = optionalLogicalScalarField(propagator, ...
             "use_eops", "orbit.propagator.use_eops", true);
+        config.UseThirdBodyGravity = optionalLogicalScalarField(propagator, ...
+            "use_third_body_gravity", "orbit.propagator.use_third_body_gravity", true);
         config.EarthSphericalHarmonics = optionalEnumStringField(propagator, ...
             "earth_spherical_harmonics", "orbit.propagator.earth_spherical_harmonics", ...
             "EGM2008", "EGM2008");
@@ -271,6 +296,51 @@ switch propagatorType
         config.EOPFile = optionalStringScalarField(propagator, ...
             "eop_file", "orbit.propagator.eop_file", "aeroiersdata.mat");
 end
+end
+
+function config = readAerodynamicsConfig(aerodynamics, dimensions_m)
+% Description:
+%   Validates homogeneous six-panel Sentman model settings and derives the
+%   rectangular 3U panel geometry in +X, -X, +Y, -Y, +Z, -Z order.
+
+config = struct();
+config.Enabled = logicalScalarField(aerodynamics, ...
+    "enabled", "spacecraft.aerodynamics.enabled");
+config.Model = enumStringField(aerodynamics, "model", ...
+    "spacecraft.aerodynamics.model", "sentman_multispecies");
+config.CenterOfMassFromGeometricCenter_B_m = columnField(aerodynamics, ...
+    "center_of_mass_from_geometric_center_B_m", ...
+    "spacecraft.aerodynamics.center_of_mass_from_geometric_center_B_m", 3);
+config.WallTemperature_K = columnField(aerodynamics, ...
+    "wall_temperature_K", "spacecraft.aerodynamics.wall_temperature_K", 6);
+config.EnergyAccommodationCoefficient = columnField(aerodynamics, ...
+    "energy_accommodation_coefficient", ...
+    "spacecraft.aerodynamics.energy_accommodation_coefficient", 6);
+
+if any(config.WallTemperature_K <= 0.0)
+    error("AOCS:Config:InvalidAerodynamics", ...
+        "spacecraft.aerodynamics.wall_temperature_K entries must be positive.");
+end
+if any(config.EnergyAccommodationCoefficient < 0.0) || ...
+        any(config.EnergyAccommodationCoefficient > 1.0)
+    error("AOCS:Config:InvalidAerodynamics", ...
+        "spacecraft.aerodynamics.energy_accommodation_coefficient entries must be in [0, 1].");
+end
+
+dx = dimensions_m(1);
+dy = dimensions_m(2);
+dz = dimensions_m(3);
+config.PanelNormals_B = [ ...
+    1.0, -1.0, 0.0, 0.0, 0.0, 0.0; ...
+    0.0, 0.0, 1.0, -1.0, 0.0, 0.0; ...
+    0.0, 0.0, 0.0, 0.0, 1.0, -1.0];
+config.PanelAreas_m2 = [dy * dz; dy * dz; dx * dz; dx * dz; dx * dy; dx * dy];
+geometricCenters_B_m = [ ...
+    dx / 2.0, -dx / 2.0, 0.0, 0.0, 0.0, 0.0; ...
+    0.0, 0.0, dy / 2.0, -dy / 2.0, 0.0, 0.0; ...
+    0.0, 0.0, 0.0, 0.0, dz / 2.0, -dz / 2.0];
+config.PanelCenters_B_m = geometricCenters_B_m - ...
+    repmat(config.CenterOfMassFromGeometricCenter_B_m, 1, 6);
 end
 
 function config = buildEnvironmentBusConfig(AOCS)
@@ -294,6 +364,19 @@ config.srp_enabled = double(AOCS.Environment.SRP.Enabled);
 config.srp_area_ref_m2 = AOCS.Environment.SRP.AreaRef_m2;
 config.srp_coefficient_reflectivity = AOCS.Environment.SRP.CoefficientReflectivity;
 config.srp_center_of_pressure_B_m = AOCS.Environment.SRP.CenterOfPressure_B_m;
+config.atmosphere_enabled = double(AOCS.Environment.Atmosphere.Enabled);
+config.atmosphere_model_id = atmosphereModelId(AOCS.Environment.Atmosphere.Model);
+config.atmosphere_mode_id = atmosphereModeId(AOCS.Environment.Atmosphere.Mode);
+config.atmosphere_space_weather_source_id = ...
+    atmosphereSpaceWeatherSourceId(AOCS.Environment.Atmosphere.SpaceWeatherSource);
+config.atmosphere_uncertainty_enabled = double(AOCS.Environment.Atmosphere.UncertaintyEnabled);
+config.rho_scale_factor = AOCS.Environment.Atmosphere.RhoScaleFactor;
+config.f10_7_sfu = AOCS.Environment.Atmosphere.NominalSpaceWeather.F10_7_sfu;
+config.f10_7_81d_sfu = AOCS.Environment.Atmosphere.NominalSpaceWeather.F10_7_81d_sfu;
+config.kp = AOCS.Environment.Atmosphere.NominalSpaceWeather.Kp;
+config.f30_sfu = AOCS.Environment.Atmosphere.NominalSpaceWeather.F30_sfu;
+config.f30_81d_sfu = AOCS.Environment.Atmosphere.NominalSpaceWeather.F30_81d_sfu;
+config.hp60 = AOCS.Environment.Atmosphere.NominalSpaceWeather.Hp60;
 end
 
 function raw = readAocsConfigFile(configFile)
@@ -476,6 +559,74 @@ end
 config.DeltaUT1_s = double(config.DeltaUT1_s(1));
 config.PolarMotion_rad = reshape(double(config.PolarMotion_rad(1, :)), 1, 2);
 config.DCIP_rad = reshape(double(config.DCIP_rad(1, :)), 1, 2);
+end
+
+function config = readAtmosphereConfig(atmosphere)
+% Description:
+%   Validates the atmosphere-model contract used by the density and
+%   aerodynamic disturbance pipeline.
+%
+% Arguments:
+%   atmosphere - JSON object from environment.atmosphere.
+%
+% Outputs:
+%   config - Struct containing normalized atmosphere settings.
+
+nominalSpaceWeather = requireStruct(atmosphere, ...
+    "nominal_space_weather", "environment.atmosphere.nominal_space_weather");
+
+config = struct();
+config.Enabled = logicalScalarField(atmosphere, "enabled", "environment.atmosphere.enabled");
+config.Model = enumStringField(atmosphere, "model", "environment.atmosphere.model", "dtm2020");
+config.Mode = enumStringField(atmosphere, "mode", "environment.atmosphere.mode", ...
+    ["operational", "research"]);
+config.SpaceWeatherSource = enumStringField(atmosphere, ...
+    "space_weather_source", "environment.atmosphere.space_weather_source", ["nominal", "file"]);
+config.SpaceWeatherFile = optionalNullableStringScalarField(atmosphere, ...
+    "space_weather_file", "environment.atmosphere.space_weather_file", "");
+config.RhoScaleFactor = scalarField(atmosphere, ...
+    "rho_scale_factor", "environment.atmosphere.rho_scale_factor", true);
+config.UncertaintyEnabled = logicalScalarField(atmosphere, ...
+    "uncertainty_enabled", "environment.atmosphere.uncertainty_enabled");
+config.NominalSpaceWeather = readDtm2020NominalSpaceWeather(nominalSpaceWeather);
+
+if config.SpaceWeatherSource == "file" && strlength(config.SpaceWeatherFile) == 0
+    error("AOCS:Config:InvalidAtmosphere", ...
+        "environment.atmosphere.space_weather_file must be non-empty when space_weather_source is 'file'.");
+end
+end
+
+function spaceWeather = readDtm2020NominalSpaceWeather(nominalSpaceWeather)
+% Description:
+%   Reads constant DTM2020 driver values used before a time-series space
+%   weather data source is connected.
+
+spaceWeather = struct();
+spaceWeather.F10_7_sfu = scalarField(nominalSpaceWeather, ...
+    "f10_7_sfu", "environment.atmosphere.nominal_space_weather.f10_7_sfu", true);
+spaceWeather.F10_7_81d_sfu = scalarField(nominalSpaceWeather, ...
+    "f10_7_81d_sfu", "environment.atmosphere.nominal_space_weather.f10_7_81d_sfu", true);
+spaceWeather.Kp = scalarField(nominalSpaceWeather, ...
+    "kp", "environment.atmosphere.nominal_space_weather.kp", false);
+spaceWeather.F30_sfu = scalarField(nominalSpaceWeather, ...
+    "f30_sfu", "environment.atmosphere.nominal_space_weather.f30_sfu", true);
+spaceWeather.F30_81d_sfu = scalarField(nominalSpaceWeather, ...
+    "f30_81d_sfu", "environment.atmosphere.nominal_space_weather.f30_81d_sfu", true);
+spaceWeather.Hp60 = scalarField(nominalSpaceWeather, ...
+    "hp60", "environment.atmosphere.nominal_space_weather.hp60", false);
+
+validateRange(spaceWeather.F10_7_sfu, 50.0, 400.0, ...
+    "environment.atmosphere.nominal_space_weather.f10_7_sfu");
+validateRange(spaceWeather.F10_7_81d_sfu, 50.0, 400.0, ...
+    "environment.atmosphere.nominal_space_weather.f10_7_81d_sfu");
+validateRange(spaceWeather.Kp, 0.0, 9.0, ...
+    "environment.atmosphere.nominal_space_weather.kp");
+validateRange(spaceWeather.F30_sfu, 50.0, 400.0, ...
+    "environment.atmosphere.nominal_space_weather.f30_sfu");
+validateRange(spaceWeather.F30_81d_sfu, 50.0, 400.0, ...
+    "environment.atmosphere.nominal_space_weather.f30_81d_sfu");
+validateRange(spaceWeather.Hp60, 0.0, 9.0, ...
+    "environment.atmosphere.nominal_space_weather.hp60");
 end
 
 function config = readSrpConfig(srp)
@@ -672,6 +823,22 @@ else
 end
 end
 
+function value = optionalNullableStringScalarField(parent, fieldName, displayName, defaultValue)
+% Description:
+%   Reads an optional JSON string where the empty string is meaningful.
+
+fieldName = char(fieldName);
+if isstruct(parent) && isfield(parent, fieldName)
+    rawValue = parent.(fieldName);
+    if ~(ischar(rawValue) || (isstring(rawValue) && isscalar(rawValue)))
+        error("AOCS:Config:InvalidField", "Config field %s must be a scalar string.", displayName);
+    end
+    value = string(rawValue);
+else
+    value = string(defaultValue);
+end
+end
+
 function value = optionalEnumStringField(parent, fieldName, displayName, allowedValues, defaultValue)
 % Description:
 %   Reads an optional string field and constrains it to an allowed set.
@@ -747,6 +914,60 @@ value = double(requireField(parent, fieldName, displayName));
 validateattributes(value, {'numeric'}, {'real', 'finite', 'scalar'}, mfilename, displayName);
 if mustBePositive && value <= 0
     error("AOCS:Config:InvalidField", "Config field %s must be positive.", displayName);
+end
+end
+
+function validateRange(value, minimumValue, maximumValue, displayName)
+% Description:
+%   Validates a finite scalar against an inclusive numeric range.
+
+if value < minimumValue || value > maximumValue
+    error("AOCS:Config:InvalidField", ...
+        "Config field %s must be in [%g, %g].", ...
+        displayName, minimumValue, maximumValue);
+end
+end
+
+function id = atmosphereModelId(model)
+% Description:
+%   Maps atmosphere model names to numeric identifiers for Simulink buses.
+
+switch string(model)
+    case "dtm2020"
+        id = 1.0;
+    otherwise
+        error("AOCS:Config:InvalidAtmosphere", ...
+            "Unsupported atmosphere model '%s'.", char(model));
+end
+end
+
+function id = atmosphereModeId(mode)
+% Description:
+%   Maps atmosphere model driver modes to numeric identifiers.
+
+switch string(mode)
+    case "operational"
+        id = 1.0;
+    case "research"
+        id = 2.0;
+    otherwise
+        error("AOCS:Config:InvalidAtmosphere", ...
+            "Unsupported atmosphere mode '%s'.", char(mode));
+end
+end
+
+function id = atmosphereSpaceWeatherSourceId(source)
+% Description:
+%   Maps atmosphere space-weather sources to numeric identifiers.
+
+switch string(source)
+    case "nominal"
+        id = 1.0;
+    case "file"
+        id = 2.0;
+    otherwise
+        error("AOCS:Config:InvalidAtmosphere", ...
+            "Unsupported atmosphere space weather source '%s'.", char(source));
 end
 end
 

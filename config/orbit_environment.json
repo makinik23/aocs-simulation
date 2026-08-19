@@ -14,8 +14,14 @@
   "orbit": {
     "central_body": "Earth",
     "propagator": {
-      "type": "kepler_unperturbed",
-      "output_frame": "ICRF"
+      "type": "numerical_high_precision",
+      "output_frame": "ICRF",
+      "gravity_model": "Spherical Harmonics",
+      "earth_spherical_harmonics": "EGM2008",
+      "spherical_harmonics_degree": 120,
+      "use_eops": true,
+      "eop_file": "aeroiersdata.mat",
+      "use_third_body_gravity": true
     },
     "initial_keplerian": {
       "semi_major_axis_m": 6871000.0,
@@ -46,6 +52,23 @@
       "enabled": true,
       "source": "aeroiersdata.mat",
       "action": "Warning"
+    },
+    "atmosphere": {
+      "enabled": true,
+      "model": "dtm2020",
+      "mode": "operational",
+      "space_weather_source": "nominal",
+      "space_weather_file": "",
+      "rho_scale_factor": 1.0,
+      "uncertainty_enabled": true,
+      "nominal_space_weather": {
+        "f10_7_sfu": 150.0,
+        "f10_7_81d_sfu": 150.0,
+        "kp": 2.0,
+        "f30_sfu": 150.0,
+        "f30_81d_sfu": 150.0,
+        "hp60": 2.0
+      }
     },
     "sun": {
       "model": "planet_ephemeris",

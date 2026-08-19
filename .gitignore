@@ -2,6 +2,7 @@ slprj/
 **/slprj/
 codegen/
 **/codegen/
+/build/
 *_rtw/
 **/*_rtw/
 *_ert_rtw/
@@ -26,3 +27,4 @@ test-results/
 ._*
 
 esa_swarm/
+/third_party/dtm2020/upstream/

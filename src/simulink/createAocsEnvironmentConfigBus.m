@@ -24,6 +24,23 @@ elems(7) = busElement("srp_area_ref_m2", 1, "m^2", "SRP reference illuminated ar
 elems(8) = busElement("srp_coefficient_reflectivity", 1, "1", "SRP reflectivity coefficient");
 elems(9) = busElement("srp_center_of_pressure_B_m", [3 1], "m", ...
     "SRP center-of-pressure offset from center of mass expressed in body axes");
+elems(10) = busElement("atmosphere_enabled", 1, "1", "Atmosphere model enable flag");
+elems(11) = busElement("atmosphere_model_id", 1, "1", "Atmosphere model identifier; 1 = DTM2020");
+elems(12) = busElement("atmosphere_mode_id", 1, "1", ...
+    "Atmosphere driver mode identifier; 1 = operational, 2 = research");
+elems(13) = busElement("atmosphere_space_weather_source_id", 1, "1", ...
+    "Space-weather source identifier; 1 = nominal constants, 2 = file time series");
+elems(14) = busElement("atmosphere_uncertainty_enabled", 1, "1", ...
+    "Atmosphere uncertainty output enable flag");
+elems(15) = busElement("rho_scale_factor", 1, "1", ...
+    "Multiplicative neutral-density scale factor applied to DTM2020 density");
+elems(16) = busElement("f10_7_sfu", 1, "1", "Nominal daily F10.7 solar flux driver [sfu]");
+elems(17) = busElement("f10_7_81d_sfu", 1, "1", "Nominal 81-day mean F10.7 solar flux driver [sfu]");
+elems(18) = busElement("kp", 1, "1", "Nominal planetary Kp geomagnetic driver");
+elems(19) = busElement("f30_sfu", 1, "1", "Nominal F30 solar flux driver for DTM2020 research mode [sfu]");
+elems(20) = busElement("f30_81d_sfu", 1, "1", ...
+    "Nominal 81-day mean F30 solar flux driver for DTM2020 research mode [sfu]");
+elems(21) = busElement("hp60", 1, "1", "Nominal hourly Hp60 geomagnetic driver for DTM2020 research mode");
 
 AOCS_EnvironmentConfigBus = Simulink.Bus;
 AOCS_EnvironmentConfigBus.Description = "Environment configuration bus generated from config/AocsSimulationConfig.json";
