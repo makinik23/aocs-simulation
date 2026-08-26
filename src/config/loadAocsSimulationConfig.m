@@ -73,7 +73,12 @@ centralBodyConstants = centralBodyConstantsFor(centralBody);
 propagatorConfig = readOrbitPropagatorConfig(propagator);
 
 keplerian = readKeplerianElements(initialKeplerian);
-validateOrbitGeometry(keplerian, centralBodyConstants.radius_m);
+initialOrbitState = readInitialOrbitState(orbit, keplerian);
+if initialOrbitState.Type == "keplerian"
+    validateOrbitGeometry(initialOrbitState.Keplerian, centralBodyConstants.radius_m);
+else
+    validateInitialCartesianState(initialOrbitState.Cartesian, centralBodyConstants.radius_m);
+end
 
 dimensions_m = columnField(spacecraftGeometry, "dimensions_m", "spacecraft.geometry.dimensions_m", 3);
 if any(dimensions_m <= 0.0)
@@ -160,7 +165,9 @@ AOCS.Epoch.TdbJulianDate = epochTdbJd;
 AOCS.Orbit.CentralBody = centralBody;
 AOCS.Orbit.Propagator = propagatorConfig;
 AOCS.Orbit.CentralBodyConstants = centralBodyConstants;
-AOCS.Orbit.InitialKeplerian = keplerian;
+AOCS.Orbit.InitialState = initialOrbitState;
+AOCS.Orbit.InitialKeplerian = initialOrbitState.Keplerian;
+AOCS.Orbit.InitialCartesian = initialOrbitState.Cartesian;
 
 AOCS.Spacecraft.Id = string(requireField(spacecraft, "id", "spacecraft.id"));
 AOCS.Spacecraft.Dimensions_m = dimensions_m;
@@ -235,6 +242,7 @@ function config = buildOrbitBusConfig(AOCS)
 %   config - Struct matching createAocsOrbitConfigBus element names.
 
 keplerian = AOCS.Orbit.InitialKeplerian;
+cartesian = AOCS.Orbit.InitialCartesian;
 
 config = struct();
 config.epoch_utc = AOCS.Epoch.Utc;
@@ -247,6 +255,34 @@ config.inclination_rad = keplerian.inclination_rad;
 config.raan_rad = keplerian.raan_rad;
 config.argument_of_periapsis_rad = keplerian.argument_of_periapsis_rad;
 config.true_anomaly_rad = keplerian.true_anomaly_rad;
+config.r_I_m = cartesian.position_I_m;
+config.v_I_m_s = cartesian.velocity_I_m_s;
+end
+
+function validateInitialCartesianState(cartesian, centralBodyRadius_m)
+% Description:
+%   Checks that a Cartesian initial state is finite and starts above the
+%   configured central-body surface.
+%
+% Arguments:
+%   cartesian - Struct containing position_I_m and velocity_I_m_s vectors.
+%   centralBodyRadius_m - Central-body reference radius [m].
+%
+% Outputs:
+%   None.
+
+radius_m = norm(cartesian.position_I_m);
+speed_m_s = norm(cartesian.velocity_I_m_s);
+
+if radius_m <= centralBodyRadius_m
+    error("AOCS:Config:InvalidCartesianOrbitState", ...
+        "orbit.initial_state.position_I_m must place the spacecraft above the central-body surface.");
+end
+
+if speed_m_s <= 0.0
+    error("AOCS:Config:InvalidCartesianOrbitState", ...
+        "orbit.initial_state.velocity_I_m_s must have non-zero norm.");
+end
 end
 
 function config = readOrbitPropagatorConfig(propagator)
@@ -377,102 +413,6 @@ config.kp = AOCS.Environment.Atmosphere.NominalSpaceWeather.Kp;
 config.f30_sfu = AOCS.Environment.Atmosphere.NominalSpaceWeather.F30_sfu;
 config.f30_81d_sfu = AOCS.Environment.Atmosphere.NominalSpaceWeather.F30_81d_sfu;
 config.hp60 = AOCS.Environment.Atmosphere.NominalSpaceWeather.Hp60;
-end
-
-function raw = readAocsConfigFile(configFile)
-% Description:
-%   Reads a JSON config and applies optional recursive overrides declared with
-%   a top-level "extends" field. The field can be one file or an ordered list
-%   of files; later files override earlier files, and the current file then
-%   overrides the merged base.
-%
-% Arguments:
-%   configFile - Path to a JSON config file.
-%
-% Outputs:
-%   raw - Fully merged raw config struct.
-
-configFile = string(configFile);
-raw = jsondecode(fileread(configFile));
-
-if isfield(raw, "extends")
-    baseFiles = configExtendsList(raw.extends, configFile);
-    raw = rmfield(raw, "extends");
-
-    merged = struct();
-    for k = 1:numel(baseFiles)
-        merged = mergeConfigStructs(merged, readAocsConfigFile(baseFiles(k)));
-    end
-
-    raw = mergeConfigStructs(merged, raw);
-end
-end
-
-function files = configExtendsList(extendsValue, configFile)
-% Description:
-%   Normalizes the top-level extends field to resolved config file paths.
-%
-% Arguments:
-%   extendsValue - String or JSON string array decoded by jsondecode.
-%   configFile - Path to the file declaring the extends field.
-%
-% Outputs:
-%   files - String column vector of resolved file paths.
-
-if ischar(extendsValue) || (isstring(extendsValue) && isscalar(extendsValue))
-    files = string(extendsValue);
-elseif isstring(extendsValue)
-    files = extendsValue(:);
-elseif iscell(extendsValue)
-    files = strings(numel(extendsValue), 1);
-    for k = 1:numel(extendsValue)
-        item = extendsValue{k};
-        if ~(ischar(item) || (isstring(item) && isscalar(item)))
-            error("AOCS:Config:InvalidExtends", ...
-                "Config extends entries must be scalar strings: %s", char(configFile));
-        end
-        files(k) = string(item);
-    end
-else
-    error("AOCS:Config:InvalidExtends", ...
-        "Config extends must be a scalar string or string array: %s", char(configFile));
-end
-
-for k = 1:numel(files)
-    if ~isfile(files(k))
-        files(k) = fullfile(fileparts(configFile), files(k));
-    end
-
-    if ~isfile(files(k))
-        error("AOCS:Config:MissingFile", "AOCS extended config file not found: %s", files(k));
-    end
-end
-end
-
-function merged = mergeConfigStructs(base, override)
-% Description:
-%   Recursively merges scalar JSON structs, with override values taking
-%   precedence over the base config.
-%
-% Arguments:
-%   base - Base decoded JSON struct.
-%   override - Override decoded JSON struct.
-%
-% Outputs:
-%   merged - Merged decoded JSON struct.
-
-merged = base;
-fields = fieldnames(override);
-
-for k = 1:numel(fields)
-    name = fields{k};
-    if isfield(merged, name) && isstruct(merged.(name)) && isstruct(override.(name)) ...
-            && isscalar(merged.(name)) && isscalar(override.(name))
-        merged.(name) = mergeConfigStructs(merged.(name), override.(name));
-    else
-        merged.(name) = override.(name);
-    end
-end
 end
 
 function config = readSunConfig(sun)
@@ -690,582 +630,4 @@ if utcSerialDay(config.EphemerisEndUtc) <= utcSerialDay(config.EphemerisStartUtc
     error("AOCS:Config:InvalidEclipseEphemerisRange", ...
         "environment.eclipse.ephemeris_end_utc must be later than environment.eclipse.ephemeris_start_utc.");
 end
-end
-
-function section = requireStruct(parent, fieldName, displayName)
-% Description:
-%   Combines required-field lookup with a type check for JSON object sections.
-%
-% Arguments:
-%   parent - Struct containing the requested field.
-%   fieldName - Field name to read.
-%   displayName - Human-readable field path for error messages.
-%
-% Outputs:
-%   section - Struct stored in parent.(fieldName).
-
-section = requireField(parent, fieldName, displayName);
-if ~isstruct(section)
-    error("AOCS:Config:InvalidField", "Config field %s must be an object.", displayName);
-end
-end
-
-
-function section = optionalStructField(parent, fieldName)
-% Description:
-%   Reads an optional JSON object and returns [] when the field is absent.
-
-fieldName = char(fieldName);
-if isstruct(parent) && isfield(parent, fieldName)
-    section = parent.(fieldName);
-    if ~isstruct(section) || ~isscalar(section)
-        error("AOCS:Config:InvalidField", "Config field %s must be an object.", fieldName);
-    end
-else
-    section = [];
-end
-end
-
-function value = requireField(parent, fieldName, displayName)
-% Description:
-%   Throws a focused config error when a required JSON field is missing.
-%
-% Arguments:
-%   parent - Struct containing the requested field.
-%   fieldName - Field name to read.
-%   displayName - Human-readable field path for error messages.
-%
-% Outputs:
-%   value - Value stored in parent.(fieldName).
-
-fieldName = char(fieldName);
-if ~isstruct(parent) || ~isfield(parent, fieldName)
-    error("AOCS:Config:MissingField", "Missing required config field: %s", displayName);
-end
-value = parent.(fieldName);
-end
-
-function value = optionalField(parent, fieldName, defaultValue)
-% Description:
-%   Keeps optional JSON metadata reads explicit and local.
-%
-% Arguments:
-%   parent - Struct that may contain fieldName.
-%   fieldName - Field name to read.
-%   defaultValue - Value returned when fieldName is absent.
-%
-% Outputs:
-%   value - Field value or defaultValue.
-
-fieldName = char(fieldName);
-if isstruct(parent) && isfield(parent, fieldName)
-    value = parent.(fieldName);
-else
-    value = defaultValue;
-end
-end
-
-function value = stringScalarField(parent, fieldName, displayName)
-% Description:
-%   Reads a required JSON string and enforces scalar, non-empty shape.
-%
-% Arguments:
-%   parent - Struct containing the requested field.
-%   fieldName - Field name to read.
-%   displayName - Human-readable field path for error messages.
-%
-% Outputs:
-%   value - Scalar string value.
-
-rawValue = requireField(parent, fieldName, displayName);
-if ~(ischar(rawValue) || (isstring(rawValue) && isscalar(rawValue)))
-    error("AOCS:Config:InvalidField", "Config field %s must be a scalar string.", displayName);
-end
-
-value = string(rawValue);
-if strlength(value) == 0
-    error("AOCS:Config:InvalidField", "Config field %s must be non-empty.", displayName);
-end
-end
-
-function value = enumStringField(parent, fieldName, displayName, allowedValues)
-% Description:
-%   Reads a required string field and constrains it to an allowed set.
-%
-% Arguments:
-%   parent - Struct containing the requested field.
-%   fieldName - Field name to read.
-%   displayName - Human-readable field path for error messages.
-%   allowedValues - String-compatible array of supported values.
-%
-% Outputs:
-%   value - Valid scalar string from allowedValues.
-
-value = stringScalarField(parent, fieldName, displayName);
-allowedValues = string(allowedValues);
-
-if ~any(value == allowedValues)
-    error("AOCS:Config:InvalidField", ...
-        "Unsupported config field %s '%s'. Expected one of: %s.", ...
-        displayName, char(value), strjoin(allowedValues, ", "));
-end
-end
-
-function value = optionalStringScalarField(parent, fieldName, displayName, defaultValue)
-% Description:
-%   Reads an optional JSON string with a scalar string default.
-
-fieldName = char(fieldName);
-if isstruct(parent) && isfield(parent, fieldName)
-    value = stringScalarField(parent, fieldName, displayName);
-else
-    value = string(defaultValue);
-end
-end
-
-function value = optionalNullableStringScalarField(parent, fieldName, displayName, defaultValue)
-% Description:
-%   Reads an optional JSON string where the empty string is meaningful.
-
-fieldName = char(fieldName);
-if isstruct(parent) && isfield(parent, fieldName)
-    rawValue = parent.(fieldName);
-    if ~(ischar(rawValue) || (isstring(rawValue) && isscalar(rawValue)))
-        error("AOCS:Config:InvalidField", "Config field %s must be a scalar string.", displayName);
-    end
-    value = string(rawValue);
-else
-    value = string(defaultValue);
-end
-end
-
-function value = optionalEnumStringField(parent, fieldName, displayName, allowedValues, defaultValue)
-% Description:
-%   Reads an optional string field and constrains it to an allowed set.
-
-fieldName = char(fieldName);
-if isstruct(parent) && isfield(parent, fieldName)
-    value = enumStringField(parent, fieldName, displayName, allowedValues);
-else
-    value = string(defaultValue);
-end
-end
-
-function value = optionalLogicalScalarField(parent, fieldName, displayName, defaultValue)
-% Description:
-%   Reads an optional JSON boolean with a scalar logical default.
-
-fieldName = char(fieldName);
-if isstruct(parent) && isfield(parent, fieldName)
-    value = logicalScalarField(parent, fieldName, displayName);
-else
-    value = defaultValue;
-end
-end
-
-function value = optionalScalarField(parent, fieldName, displayName, defaultValue, mustBePositive)
-% Description:
-%   Reads an optional scalar numeric field with a numeric default.
-
-fieldName = char(fieldName);
-if isstruct(parent) && isfield(parent, fieldName)
-    value = scalarField(parent, fieldName, displayName, mustBePositive);
-else
-    value = defaultValue;
-end
-end
-
-function value = logicalScalarField(parent, fieldName, displayName)
-% Description:
-%   Reads a required JSON boolean and enforces scalar logical shape.
-%
-% Arguments:
-%   parent - Struct containing the requested field.
-%   fieldName - Field name to read.
-%   displayName - Human-readable field path for error messages.
-%
-% Outputs:
-%   value - Scalar logical value.
-
-rawValue = requireField(parent, fieldName, displayName);
-
-if islogical(rawValue) && isscalar(rawValue)
-    value = rawValue;
-else
-    error("AOCS:Config:InvalidField", "Config field %s must be a scalar boolean.", displayName);
-end
-end
-
-function value = scalarField(parent, fieldName, displayName, mustBePositive)
-% Description:
-%   Converts JSON numeric values to double and enforces scalar shape plus
-%   optional positivity.
-%
-% Arguments:
-%   parent - Struct containing the requested field.
-%   fieldName - Field name to read.
-%   displayName - Human-readable field path for error messages.
-%   mustBePositive - True when zero and negative values are invalid.
-%
-% Outputs:
-%   value - Validated finite real scalar double.
-
-value = double(requireField(parent, fieldName, displayName));
-validateattributes(value, {'numeric'}, {'real', 'finite', 'scalar'}, mfilename, displayName);
-if mustBePositive && value <= 0
-    error("AOCS:Config:InvalidField", "Config field %s must be positive.", displayName);
-end
-end
-
-function validateRange(value, minimumValue, maximumValue, displayName)
-% Description:
-%   Validates a finite scalar against an inclusive numeric range.
-
-if value < minimumValue || value > maximumValue
-    error("AOCS:Config:InvalidField", ...
-        "Config field %s must be in [%g, %g].", ...
-        displayName, minimumValue, maximumValue);
-end
-end
-
-function id = atmosphereModelId(model)
-% Description:
-%   Maps atmosphere model names to numeric identifiers for Simulink buses.
-
-switch string(model)
-    case "dtm2020"
-        id = 1.0;
-    otherwise
-        error("AOCS:Config:InvalidAtmosphere", ...
-            "Unsupported atmosphere model '%s'.", char(model));
-end
-end
-
-function id = atmosphereModeId(mode)
-% Description:
-%   Maps atmosphere model driver modes to numeric identifiers.
-
-switch string(mode)
-    case "operational"
-        id = 1.0;
-    case "research"
-        id = 2.0;
-    otherwise
-        error("AOCS:Config:InvalidAtmosphere", ...
-            "Unsupported atmosphere mode '%s'.", char(mode));
-end
-end
-
-function id = atmosphereSpaceWeatherSourceId(source)
-% Description:
-%   Maps atmosphere space-weather sources to numeric identifiers.
-
-switch string(source)
-    case "nominal"
-        id = 1.0;
-    case "file"
-        id = 2.0;
-    otherwise
-        error("AOCS:Config:InvalidAtmosphere", ...
-            "Unsupported atmosphere space weather source '%s'.", char(source));
-end
-end
-
-function validateTdbMinusUtc(value)
-% Description:
-%   Guards the manually configured UTC->TDB epoch offset against unit mistakes.
-%
-% Arguments:
-%   value - TDB minus UTC offset [s].
-%
-% Outputs:
-%   None.
-
-if value < 0 || value > 200
-    error("AOCS:Config:InvalidTimeOffset", ...
-        "Config field epoch.tdb_minus_utc_s must be a plausible seconds offset in [0, 200].");
-end
-end
-
-function constants = centralBodyConstantsFor(centralBody)
-% Description:
-%   Resolves central-body constants used by orbit propagation and
-%   environment products.
-%
-% Arguments:
-%   centralBody - Name from orbit.central_body.
-%
-% Outputs:
-%   constants - Struct with numeric constants for supported bodies.
-
-if centralBody ~= "Earth"
-    error("AOCS:Config:UnsupportedCentralBody", ...
-        "Unsupported orbit.central_body '%s'. Expected 'Earth'.", char(centralBody));
-end
-
-constants = struct();
-constants.mu_m3_s2 = 3.986004418e14;
-constants.radius_m = 6378137.0;
-end
-
-function keplerian = readKeplerianElements(initialKeplerian)
-% Description:
-%   Validates classical Keplerian elements for an elliptical Earth orbit.
-%
-% Arguments:
-%   initialKeplerian - JSON object from orbit.initial_keplerian.
-%
-% Outputs:
-%   keplerian - Struct containing finite SI/radian Keplerian elements.
-
-keplerian = struct();
-keplerian.semi_major_axis_m = scalarField(initialKeplerian, ...
-    "semi_major_axis_m", "orbit.initial_keplerian.semi_major_axis_m", true);
-keplerian.eccentricity = scalarField(initialKeplerian, ...
-    "eccentricity", "orbit.initial_keplerian.eccentricity", false);
-keplerian.inclination_rad = scalarField(initialKeplerian, ...
-    "inclination_rad", "orbit.initial_keplerian.inclination_rad", false);
-keplerian.raan_rad = scalarField(initialKeplerian, ...
-    "raan_rad", "orbit.initial_keplerian.raan_rad", false);
-keplerian.argument_of_periapsis_rad = scalarField(initialKeplerian, ...
-    "argument_of_periapsis_rad", "orbit.initial_keplerian.argument_of_periapsis_rad", false);
-keplerian.true_anomaly_rad = scalarField(initialKeplerian, ...
-    "true_anomaly_rad", "orbit.initial_keplerian.true_anomaly_rad", false);
-
-if keplerian.eccentricity < 0 || keplerian.eccentricity >= 1
-    error("AOCS:Config:InvalidKeplerianElements", ...
-        "orbit.initial_keplerian.eccentricity must satisfy 0 <= e < 1 for the initial elliptical propagator.");
-end
-
-if keplerian.inclination_rad < 0 || keplerian.inclination_rad > pi
-    error("AOCS:Config:InvalidKeplerianElements", ...
-        "orbit.initial_keplerian.inclination_rad must satisfy 0 <= i <= pi.");
-end
-end
-
-function validateOrbitGeometry(keplerian, centralBodyRadius_m)
-% Description:
-%   Checks that the configured initial ellipse is above the central body.
-%
-% Arguments:
-%   keplerian - Validated Keplerian element struct.
-%   centralBodyRadius_m - Central-body reference radius [m].
-%
-% Outputs:
-%   None.
-
-periapsisRadius_m = keplerian.semi_major_axis_m * (1 - keplerian.eccentricity);
-if periapsisRadius_m <= centralBodyRadius_m
-    error("AOCS:Config:InvalidKeplerianElements", ...
-        "orbit.initial_keplerian gives a periapsis radius below the central-body radius.");
-end
-end
-
-function validateUtcEpoch(epochUtc, displayName)
-% Description:
-%   Validates a UTC epoch vector [year month day hour minute second]'.
-%
-% Arguments:
-%   epochUtc - 6-by-1 epoch vector.
-%   displayName - Human-readable field path for error messages.
-%
-% Outputs:
-%   None.
-
-integerParts = epochUtc(1:5);
-if any(abs(integerParts - round(integerParts)) > 0)
-    error("AOCS:Config:InvalidEpoch", "Config field %s must use integer year/month/day/hour/minute values.", displayName);
-end
-
-year = epochUtc(1);
-month = epochUtc(2);
-day = epochUtc(3);
-hour = epochUtc(4);
-minute = epochUtc(5);
-second = epochUtc(6);
-
-if year < 1
-    error("AOCS:Config:InvalidEpoch", "Config field %s has invalid year.", displayName);
-end
-
-if month < 1 || month > 12
-    error("AOCS:Config:InvalidEpoch", "Config field %s has invalid month.", displayName);
-end
-
-maxDay = daysInMonth(year, month);
-if day < 1 || day > maxDay
-    error("AOCS:Config:InvalidEpoch", "Config field %s has invalid day for the given month/year.", displayName);
-end
-
-if hour < 0 || hour > 23
-    error("AOCS:Config:InvalidEpoch", "Config field %s has invalid hour.", displayName);
-end
-
-if minute < 0 || minute > 59
-    error("AOCS:Config:InvalidEpoch", "Config field %s has invalid minute.", displayName);
-end
-
-if second < 0 || second >= 60
-    error("AOCS:Config:InvalidEpoch", "Config field %s has invalid second.", displayName);
-end
-end
-
-function serialDay = utcSerialDay(epochUtc)
-% Description:
-%   Converts a validated UTC vector to a serial day for range comparisons.
-%
-% Arguments:
-%   epochUtc - 6-by-1 UTC vector [year month day hour minute second]'.
-%
-% Outputs:
-%   serialDay - MATLAB serial day number.
-
-serialDay = datenum(epochUtc(:).');
-end
-
-function jd = calendarUtcToJulianDate(epochUtc)
-% Description:
-%   Converts a Gregorian UTC calendar vector to Julian date using arithmetic
-%   that does not depend on Aerospace Toolbox helper functions.
-%
-% Arguments:
-%   epochUtc - 6-by-1 UTC vector [year month day hour minute second]'.
-%
-% Outputs:
-%   jd - Julian date corresponding to the UTC calendar instant.
-
-year = floor(double(epochUtc(1)));
-month = floor(double(epochUtc(2)));
-day = floor(double(epochUtc(3)));
-
-if month <= 2
-    year = year - 1;
-    month = month + 12;
-end
-
-a = floor(year / 100.0);
-b = 2.0 - a + floor(a / 4.0);
-dayFraction = (double(epochUtc(4)) ...
-    + (double(epochUtc(5)) + double(epochUtc(6)) / 60.0) / 60.0) / 24.0;
-
-jd = floor(365.25 * (year + 4716.0)) ...
-    + floor(30.6001 * (month + 1.0)) ...
-    + day + dayFraction + b - 1524.5;
-end
-
-function dayCount = daysInMonth(year, month)
-% Description:
-%   Returns Gregorian month length without requiring toolbox helpers.
-%
-% Arguments:
-%   year - Integer year.
-%   month - Integer month number.
-%
-% Outputs:
-%   dayCount - Number of days in the requested month.
-
-monthLengths = [31 28 31 30 31 30 31 31 30 31 30 31];
-dayCount = monthLengths(month);
-if month == 2 && isLeapYear(year)
-    dayCount = 29;
-end
-end
-
-function result = isLeapYear(year)
-% Description:
-%   Evaluates Gregorian leap-year rules.
-%
-% Arguments:
-%   year - Integer year.
-%
-% Outputs:
-%   result - True for leap years.
-
-result = (mod(year, 4) == 0 && mod(year, 100) ~= 0) || mod(year, 400) == 0;
-end
-
-function value = columnField(parent, fieldName, displayName, rows)
-% Description:
-%   Converts a JSON vector to a MATLAB column vector and checks its length.
-%
-% Arguments:
-%   parent - Struct containing the requested field.
-%   fieldName - Field name to read.
-%   displayName - Human-readable field path for error messages.
-%   rows - Required number of rows.
-%
-% Outputs:
-%   value - rows-by-1 finite real double vector.
-
-value = double(requireField(parent, fieldName, displayName));
-value = value(:);
-validateattributes(value, {'numeric'}, {'real', 'finite', 'size', [rows 1]}, mfilename, displayName);
-end
-
-function value = optionalColumnField(parent, fieldName, displayName, rows, defaultValue)
-% Description:
-%   Provides optional vector fields while still enforcing the same numeric
-%   contract as required vector fields.
-%
-% Arguments:
-%   parent - Struct that may contain fieldName.
-%   fieldName - Field name to read.
-%   displayName - Human-readable field path for error messages.
-%   rows - Required number of rows.
-%   defaultValue - Vector used when fieldName is absent.
-%
-% Outputs:
-%   value - rows-by-1 finite real double vector.
-
-fieldName = char(fieldName);
-if isstruct(parent) && isfield(parent, fieldName)
-    value = double(parent.(fieldName));
-    value = value(:);
-else
-    value = defaultValue(:);
-end
-validateattributes(value, {'numeric'}, {'real', 'finite', 'size', [rows 1]}, mfilename, displayName);
-end
-
-function value = matrixField(parent, fieldName, displayName, rows, cols)
-% Description:
-%   Converts a JSON matrix to double and enforces exact matrix dimensions.
-%
-% Arguments:
-%   parent - Struct containing the requested field.
-%   fieldName - Field name to read.
-%   displayName - Human-readable field path for error messages.
-%   rows - Required number of rows.
-%   cols - Required number of columns.
-%
-% Outputs:
-%   value - rows-by-cols finite real double matrix.
-
-value = double(requireField(parent, fieldName, displayName));
-validateattributes(value, {'numeric'}, {'real', 'finite', 'size', [rows cols]}, mfilename, displayName);
-end
-
-function euler321 = quaternionToEuler321(q)
-% Description:
-%   Computes the Aerospace Blockset 6DOF initial Euler orientation from the
-%   JSON quaternion. Pitch is clamped before asin to avoid roundoff overflow.
-%
-% Arguments:
-%   q - 4-by-1 scalar-first quaternion [q0 q1 q2 q3]'.
-%
-% Outputs:
-%   euler321 - 3-by-1 [roll pitch yaw]' vector [rad].
-
-q0 = q(1);
-q1 = q(2);
-q2 = q(3);
-q3 = q(4);
-
-roll = atan2(2 * (q0*q1 + q2*q3), 1 - 2 * (q1^2 + q2^2));
-pitchArgument = 2 * (q0*q2 - q3*q1);
-pitchArgument = min(max(pitchArgument, -1), 1);
-pitch = asin(pitchArgument);
-yaw = atan2(2 * (q0*q3 + q1*q2), 1 - 2 * (q2^2 + q3^2));
-
-euler321 = [roll; pitch; yaw];
 end

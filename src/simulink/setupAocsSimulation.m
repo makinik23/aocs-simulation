@@ -15,9 +15,8 @@ if nargin < 1 || strlength(string(configFile)) == 0
     configFile = fullfile(projectRoot, "config", "AocsSimulationConfig.json");
 end
 
-addpath(fullfile(projectRoot, "src", "config"));
-addpath(fullfile(projectRoot, "src", "simulink"));
-addpath(fullfile(projectRoot, "src", "environment"));
+addpath(projectRoot);
+setupAocsPaths(projectRoot);
 
 nativeBuildDirectory = fullfile(projectRoot, "build", "native", ...
     "dtm2020", computer("arch"));

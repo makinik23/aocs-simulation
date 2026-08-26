@@ -21,7 +21,8 @@ For now, the spacecraft of interest is a simple CubeSat 3U.
 
      - M_total = M_external + M_gravity_gradient + M_residual_magnetic + M_SRP + M_aerodynamic
 - Configuration scenarios for repeatable mission cases and disturbance studies.
-- Model validation against real flight data: Sentinel-1A POD for ECI/ECEF transformations and Swarm A MAG/VirES for geomagnetic field output.
+- Model validation against external flight/reference data: Sentinel-1A POD for ECI/ECEF transformations,
+  Swarm A MAG/VirES for geomagnetic field output, and Planet Dove 3U OEM data for orbit propagation.
 
 ## Run
 
@@ -29,6 +30,13 @@ For now, the spacecraft of interest is a simple CubeSat 3U.
 run_aocs_simulation
 plot_attitude_results
 plot_orbit_environment_results
+```
+
+Clean generated MATLAB/Simulink artifacts without removing local dependencies:
+
+```matlab
+setupAocsPaths
+cleanAocsArtifacts
 ```
 
 Scenario examples:
@@ -75,10 +83,16 @@ products with an independent ERFA/SOFA reference.
 The geomagnetic environment harness is checked against Swarm A MAG Level-1B data
 from VirES, including the onboard magnetic-field measurements and VirES IGRF
 reference.
+Orbit propagation is also checked end-to-end against Planet Dove 3U OEM ephemeris
+data. The validation initializes the plant from the OEM Cartesian state and
+compares propagated ECI position/velocity residuals over a short default arc.
+Longer one-orbit and 24h Planet Dove checks are opt-in with
+`AOCS_RUN_LONG_EXTERNAL_VALIDATION=1`.
 
 ```matlab
 runtests("tests/transformations")
 runtests("tests/orbit_and_environment/SwarmMagneticValidationTest.m")
+runtests("tests/orbit_and_environment/PlanetDoveOrbitPropagationValidationTest.m")
 runtests("tests/environment")
 ```
 

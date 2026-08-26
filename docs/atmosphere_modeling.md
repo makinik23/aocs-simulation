@@ -107,10 +107,11 @@ F_aero_I = C_BI' * F_aero_B
 a_aero_I = F_aero_I / spacecraft_mass
 ```
 
-`a_aero_I` is connected to the `A_icrf` input of Aerospace Blockset's
-Numerical (high precision) Orbit Propagator. `M_aero_B` is included in the
-attitude disturbance-torque sum. This closes the translational and rotational
-aerodynamic paths.
+`a_aero_I` is summed with the project SRP acceleration into `a_dist_I_m_s2`,
+which is connected to the `A_icrf` input of Aerospace Blockset's Numerical
+(high precision) Orbit Propagator. `M_aero_B` is included in the attitude
+disturbance-torque sum. This closes the translational and rotational aerodynamic
+paths.
 
 ## Current Fidelity Boundary
 

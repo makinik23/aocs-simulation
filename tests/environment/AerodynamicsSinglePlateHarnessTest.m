@@ -10,9 +10,19 @@ classdef AerodynamicsSinglePlateHarnessTest < matlab.unittest.TestCase
 
     methods (TestClassSetup)
         function prepareModelAndHarness(testCase)
-            testCase.ProjectRoot = fileparts(fileparts(fileparts(mfilename("fullpath"))));
+            % Description:
+            %   Locates project fixtures, configures the plant model, and opens
+            %   the Sentman single-plate harness for the test class.
+            %
+            % Arguments:
+            %   testCase - matlab.unittest.TestCase instance.
+            %
+            % Outputs:
+            %   None.
+
+            testCase.ProjectRoot = projectRoot();
             testCase.Owner = "aocs_plant/Orbit & Environment/Disturbance Torques/" + ...
-                "Sentman Multispecies Panels";
+                "Aerodynamic Disturbance Path/Sentman Multispecies Panels";
             testCase.HarnessFile = fullfile(testCase.ProjectRoot, "tests", ...
                 "harnesses", testCase.HarnessName + ".slx");
             testCase.ReferenceFile = fullfile(testCase.ProjectRoot, "validation", ...
@@ -21,11 +31,7 @@ classdef AerodynamicsSinglePlateHarnessTest < matlab.unittest.TestCase
                 "validation", "aerodynamics", "data", ...
                 "sentman_3u_cuboid_reference.csv");
 
-            addpath(testCase.ProjectRoot);
-            addpath(fullfile(testCase.ProjectRoot, "src", "config"));
-            addpath(fullfile(testCase.ProjectRoot, "src", "simulink"));
-            addpath(fullfile(testCase.ProjectRoot, "src", "environment"));
-            addpath(fullfile(testCase.ProjectRoot, "tests", "harnesses"));
+            setupAocsPaths(testCase.ProjectRoot, true);
 
             testCase.assertTrue(isfile(testCase.HarnessFile), ...
                 "The single-plate aerodynamics harness is missing.");
@@ -44,18 +50,31 @@ classdef AerodynamicsSinglePlateHarnessTest < matlab.unittest.TestCase
 
     methods (TestClassTeardown)
         function closeModelAndHarness(testCase)
-            try
-                sltest.harness.close(testCase.Owner, testCase.HarnessName);
-            catch
-            end
-            if bdIsLoaded("aocs_plant")
-                close_system("aocs_plant", 0);
-            end
+            % Description:
+            %   Closes the Sentman aerodynamics harness and owner plant model.
+            %
+            % Arguments:
+            %   testCase - matlab.unittest.TestCase instance.
+            %
+            % Outputs:
+            %   None.
+
+            closeHarnessAndModel(testCase.Owner, testCase.HarnessName, "aocs_plant");
         end
     end
 
     methods (Test)
         function fixtureMatchesIndependentAdbSatReference(testCase)
+            % Description:
+            %   Compares single-plate harness force, coefficients, and derived
+            %   acceleration against a frozen independent ADBSat reference.
+            %
+            % Arguments:
+            %   testCase - matlab.unittest.TestCase instance.
+            %
+            % Outputs:
+            %   None.
+
             reference = readtable(testCase.ReferenceFile, "TextType", "string");
             simulation = runReferenceCases(testCase.HarnessName, reference);
 
@@ -91,6 +110,16 @@ classdef AerodynamicsSinglePlateHarnessTest < matlab.unittest.TestCase
         end
 
         function threeUCuboidMatchesFullMeshAdbSatReference(testCase)
+            % Description:
+            %   Verifies that the simplified 3U cuboid harness matches the
+            %   frozen full-mesh ADBSat force and moment reference.
+            %
+            % Arguments:
+            %   testCase - matlab.unittest.TestCase instance.
+            %
+            % Outputs:
+            %   None.
+
             reference = readtable(testCase.CuboidReferenceFile, ...
                 "TextType", "string");
             simulation = runCuboidReferenceCases(testCase.HarnessName, ...
@@ -124,6 +153,16 @@ classdef AerodynamicsSinglePlateHarnessTest < matlab.unittest.TestCase
         end
 
         function centerOfMassOffsetProducesReferenceMomentShift(testCase)
+            % Description:
+            %   Checks that a center-of-mass offset shifts aerodynamic moments
+            %   by the expected force cross-arm contribution.
+            %
+            % Arguments:
+            %   testCase - matlab.unittest.TestCase instance.
+            %
+            % Outputs:
+            %   None.
+
             reference = readtable(testCase.CuboidReferenceFile, ...
                 "TextType", "string");
             reference = reference(1:19:end, :);
@@ -146,6 +185,16 @@ classdef AerodynamicsSinglePlateHarnessTest < matlab.unittest.TestCase
 end
 
 function simulation = runReferenceCases(harnessName, reference)
+% Description:
+%   Runs all frozen single-plate ADBSat reference rows through the harness.
+%
+% Arguments:
+%   harnessName - Name of the opened single-plate harness.
+%   reference - Table of frozen single-plate reference cases.
+%
+% Outputs:
+%   simulation - Struct containing harness output rows.
+
 caseTimeS = (0:height(reference) - 1).';
 inputDataset = singlePlateInputDataset(reference, caseTimeS);
 simulation = runHarness(harnessName, inputDataset, caseTimeS);
@@ -153,6 +202,18 @@ end
 
 function simulation = runCuboidReferenceCases(harnessName, reference, ...
         centerOfMassOffsetM, geometryRotation)
+% Description:
+%   Runs frozen 3U cuboid reference rows with optional geometry transforms.
+%
+% Arguments:
+%   harnessName - Name of the opened single-plate harness.
+%   reference - Table of frozen 3U cuboid reference cases.
+%   centerOfMassOffsetM - 3-by-1 center-of-mass offset [m].
+%   geometryRotation - 3-by-3 rotation applied to cuboid panel geometry.
+%
+% Outputs:
+%   simulation - Struct containing harness output rows.
+
 caseTimeS = (0:height(reference) - 1).';
 inputDataset = cuboidInputDataset(reference, caseTimeS, ...
     centerOfMassOffsetM, geometryRotation);
@@ -160,6 +221,17 @@ simulation = runHarness(harnessName, inputDataset, caseTimeS);
 end
 
 function simulation = runHarness(harnessName, inputDataset, caseTimeS)
+% Description:
+%   Simulates the harness with external inputs and extracts aligned outputs.
+%
+% Arguments:
+%   harnessName - Name of the opened single-plate harness.
+%   inputDataset - Simulink external-input Dataset.
+%   caseTimeS - Sample times used by reference cases [s].
+%
+% Outputs:
+%   simulation - Struct containing force, moment, acceleration, and q-dynamic rows.
+
 simIn = Simulink.SimulationInput(harnessName);
 simIn = simIn.setExternalInput(inputDataset);
 simIn = simIn.setModelParameter( ...
@@ -182,6 +254,16 @@ simulation.qDynamicNm2 = harnessOutputRows(simOut, "q_dyn_N_m2", 1, caseTimeS);
 end
 
 function inputDataset = singlePlateInputDataset(reference, timeS)
+% Description:
+%   Builds external-input timeseries for single-plate ADBSat reference cases.
+%
+% Arguments:
+%   reference - Table of frozen single-plate reference cases.
+%   timeS - Sample times for each reference case [s].
+%
+% Outputs:
+%   inputDataset - Simulink external-input Dataset for the harness.
+
 n = height(reference);
 speedMps = reference.speed_m_s;
 cosine = cosd(reference.angle_deg);
@@ -206,22 +288,34 @@ wallTemperatureK = repmat(reference.T_wall_K, 1, 6);
 energyAccommodation = repmat(reference.alpha_E, 1, 6);
 
 inputDataset = Simulink.SimulationData.Dataset();
-inputDataset = addInput(inputDataset, "v_flow_B_m_s", vFlowBodyMps, timeS);
-inputDataset = addInput(inputDataset, "rho_kg_m3", reference.rho_kg_m3, timeS);
-inputDataset = addInput(inputDataset, "T_local_K", reference.T_atm_K, timeS);
-inputDataset = addInput(inputDataset, "number_densities_m3", numberDensitiesM3, timeS);
-inputDataset = addInput(inputDataset, "C_BI", identityDcm, timeS);
-inputDataset = addInput(inputDataset, "mass_kg", reference.mass_kg, timeS);
-inputDataset = addInput(inputDataset, "aero_enabled", ones(n, 1), timeS);
-inputDataset = addInput(inputDataset, "panel_normals_B", panelNormals, timeS);
-inputDataset = addInput(inputDataset, "panel_areas_m2", panelAreasM2, timeS);
-inputDataset = addInput(inputDataset, "panel_centers_B_m", panelCentersM, timeS);
-inputDataset = addInput(inputDataset, "wall_temperature_K", wallTemperatureK, timeS);
-inputDataset = addInput(inputDataset, "energy_accommodation", energyAccommodation, timeS);
+inputDataset = addHarnessInput(inputDataset, "v_flow_B_m_s", vFlowBodyMps, timeS);
+inputDataset = addHarnessInput(inputDataset, "rho_kg_m3", reference.rho_kg_m3, timeS);
+inputDataset = addHarnessInput(inputDataset, "T_local_K", reference.T_atm_K, timeS);
+inputDataset = addHarnessInput(inputDataset, "number_densities_m3", numberDensitiesM3, timeS);
+inputDataset = addHarnessInput(inputDataset, "C_BI", identityDcm, timeS);
+inputDataset = addHarnessInput(inputDataset, "mass_kg", reference.mass_kg, timeS);
+inputDataset = addHarnessInput(inputDataset, "aero_enabled", ones(n, 1), timeS);
+inputDataset = addHarnessInput(inputDataset, "panel_normals_B", panelNormals, timeS);
+inputDataset = addHarnessInput(inputDataset, "panel_areas_m2", panelAreasM2, timeS);
+inputDataset = addHarnessInput(inputDataset, "panel_centers_B_m", panelCentersM, timeS);
+inputDataset = addHarnessInput(inputDataset, "wall_temperature_K", wallTemperatureK, timeS);
+inputDataset = addHarnessInput(inputDataset, "energy_accommodation", energyAccommodation, timeS);
 end
 
 function inputDataset = cuboidInputDataset(reference, timeS, ...
         centerOfMassOffsetM, geometryRotation)
+% Description:
+%   Builds external-input timeseries for 3U cuboid ADBSat reference cases.
+%
+% Arguments:
+%   reference - Table of frozen 3U cuboid reference cases.
+%   timeS - Sample times for each reference case [s].
+%   centerOfMassOffsetM - 3-by-1 center-of-mass offset [m].
+%   geometryRotation - 3-by-3 rotation applied to cuboid panel geometry.
+%
+% Outputs:
+%   inputDataset - Simulink external-input Dataset for the harness.
+
 n = height(reference);
 vFlowBodyMps = [reference.v_flow_x_m_s, reference.v_flow_y_m_s, ...
     reference.v_flow_z_m_s] * geometryRotation.';
@@ -248,72 +342,60 @@ wallTemperatureK = repmat(reference.T_wall_K, 1, 6);
 energyAccommodation = repmat(reference.alpha_E, 1, 6);
 
 inputDataset = Simulink.SimulationData.Dataset();
-inputDataset = addInput(inputDataset, "v_flow_B_m_s", vFlowBodyMps, timeS);
-inputDataset = addInput(inputDataset, "rho_kg_m3", reference.rho_kg_m3, timeS);
-inputDataset = addInput(inputDataset, "T_local_K", reference.T_atm_K, timeS);
-inputDataset = addInput(inputDataset, "number_densities_m3", numberDensitiesM3, timeS);
-inputDataset = addInput(inputDataset, "C_BI", identityDcm, timeS);
-inputDataset = addInput(inputDataset, "mass_kg", reference.mass_kg, timeS);
-inputDataset = addInput(inputDataset, "aero_enabled", ones(n, 1), timeS);
-inputDataset = addInput(inputDataset, "panel_normals_B", panelNormals, timeS);
-inputDataset = addInput(inputDataset, "panel_areas_m2", panelAreasM2, timeS);
-inputDataset = addInput(inputDataset, "panel_centers_B_m", panelCentersM, timeS);
-inputDataset = addInput(inputDataset, "wall_temperature_K", wallTemperatureK, timeS);
-inputDataset = addInput(inputDataset, "energy_accommodation", energyAccommodation, timeS);
-end
-
-function dataset = addInput(dataset, name, values, timeS)
-signal = timeseries(values, timeS);
-signal.Name = name;
-dataset = dataset.addElement(signal, name);
-end
-
-function values = harnessOutputRows(simOut, signalName, width, sampleTimeS)
-yout = simOut.get("yout");
-for index = 1:yout.numElements
-    element = yout{index};
-    if outputElementMatches(element, signalName)
-        signal = element.Values;
-        data = squeeze(signal.Data);
-        if width == 1
-            data = data(:);
-        elseif size(data, 1) ~= numel(signal.Time) && ...
-                size(data, 2) == numel(signal.Time)
-            data = data.';
-        end
-        data = reshape(data, [], width);
-        values = interp1(signal.Time(:), data, sampleTimeS, "linear");
-        return;
-    end
-end
-error("AOCS:Tests:MissingHarnessOutput", ...
-    "Could not find harness output '%s'.", signalName);
-end
-
-function tf = outputElementMatches(element, signalName)
-tf = isprop(element, "Name") && string(element.Name) == string(signalName);
-if tf
-    return;
-end
-try
-    blockPath = string(element.BlockPath.getBlock(1));
-    tf = endsWith(blockPath, "/" + string(signalName));
-catch
-    tf = false;
-end
+inputDataset = addHarnessInput(inputDataset, "v_flow_B_m_s", vFlowBodyMps, timeS);
+inputDataset = addHarnessInput(inputDataset, "rho_kg_m3", reference.rho_kg_m3, timeS);
+inputDataset = addHarnessInput(inputDataset, "T_local_K", reference.T_atm_K, timeS);
+inputDataset = addHarnessInput(inputDataset, "number_densities_m3", numberDensitiesM3, timeS);
+inputDataset = addHarnessInput(inputDataset, "C_BI", identityDcm, timeS);
+inputDataset = addHarnessInput(inputDataset, "mass_kg", reference.mass_kg, timeS);
+inputDataset = addHarnessInput(inputDataset, "aero_enabled", ones(n, 1), timeS);
+inputDataset = addHarnessInput(inputDataset, "panel_normals_B", panelNormals, timeS);
+inputDataset = addHarnessInput(inputDataset, "panel_areas_m2", panelAreasM2, timeS);
+inputDataset = addHarnessInput(inputDataset, "panel_centers_B_m", panelCentersM, timeS);
+inputDataset = addHarnessInput(inputDataset, "wall_temperature_K", wallTemperatureK, timeS);
+inputDataset = addHarnessInput(inputDataset, "energy_accommodation", energyAccommodation, timeS);
 end
 
 function forceN = cuboidReferenceForce(reference)
+% Description:
+%   Extracts frozen 3U cuboid body-force reference columns.
+%
+% Arguments:
+%   reference - Table of frozen 3U cuboid reference cases.
+%
+% Outputs:
+%   forceN - N-by-3 reference force matrix [N].
+
 forceN = [reference.force_x_reference_N, ...
     reference.force_y_reference_N, reference.force_z_reference_N];
 end
 
 function momentNm = cuboidReferenceMoment(reference)
+% Description:
+%   Extracts frozen 3U cuboid body-moment reference columns.
+%
+% Arguments:
+%   reference - Table of frozen 3U cuboid reference cases.
+%
+% Outputs:
+%   momentNm - N-by-3 reference moment matrix [N*m].
+
 momentNm = [reference.moment_x_reference_Nm, ...
     reference.moment_y_reference_Nm, reference.moment_z_reference_Nm];
 end
 
 function relativeError = vectorRelativeError(actual, expected, floorValue)
+% Description:
+%   Computes row-wise vector relative error with a lower norm floor.
+%
+% Arguments:
+%   actual - N-by-M actual vectors.
+%   expected - N-by-M expected vectors.
+%   floorValue - Minimum denominator used for near-zero expected vectors.
+%
+% Outputs:
+%   relativeError - N-by-1 relative error vector.
+
 relativeError = vecnorm(actual - expected, 2, 2) ./ ...
     max(vecnorm(expected, 2, 2), floorValue);
 end

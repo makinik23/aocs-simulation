@@ -6,14 +6,32 @@ classdef AtmosphereProductsTest < matlab.unittest.TestCase
 
     methods (TestClassSetup)
         function addProjectPaths(testCase)
-            testCase.ProjectRoot = fileparts(fileparts(fileparts(mfilename("fullpath"))));
-            addpath(fullfile(testCase.ProjectRoot, "src", "environment"));
-            addpath(fullfile(testCase.ProjectRoot, "src", "simulink"));
+            % Description:
+            %   Locates the project root and adds source/test helper paths.
+            %
+            % Arguments:
+            %   testCase - matlab.unittest.TestCase instance.
+            %
+            % Outputs:
+            %   None.
+
+            testCase.ProjectRoot = projectRoot();
+            setupAocsPaths(testCase.ProjectRoot, true);
         end
     end
 
     methods (Test)
         function atmosphereBusDefinesRuntimeContract(testCase)
+            % Description:
+            %   Verifies that the atmosphere bus exposes the expected runtime
+            %   product names and vector dimensions.
+            %
+            % Arguments:
+            %   testCase - matlab.unittest.TestCase instance.
+            %
+            % Outputs:
+            %   None.
+
             bus = createAocsAtmosphereBus();
             names = string({bus.Elements.Name});
 
@@ -36,6 +54,16 @@ classdef AtmosphereProductsTest < matlab.unittest.TestCase
         end
 
         function environmentBusPublishesAtmosphereProducts(testCase)
+            % Description:
+            %   Verifies that the top-level environment bus includes the
+            %   atmosphere-products bus.
+            %
+            % Arguments:
+            %   testCase - matlab.unittest.TestCase instance.
+            %
+            % Outputs:
+            %   None.
+
             createAocsAtmosphereBus("base");
             bus = createAocsEnvironmentBus();
             names = string({bus.Elements.Name});
@@ -47,6 +75,16 @@ classdef AtmosphereProductsTest < matlab.unittest.TestCase
         end
 
         function enabledAtmosphereProducesFiniteScaledProducts(testCase)
+            % Description:
+            %   Checks that the enabled atmosphere model returns finite, scaled
+            %   density, temperature, species, and velocity products.
+            %
+            % Arguments:
+            %   testCase - matlab.unittest.TestCase instance.
+            %
+            % Outputs:
+            %   None.
+
             config = nominalEnvironmentConfig(2.5, true);
             r_I_m = [6871000.0; 0.0; 0.0];
             v_I_m_s = [0.0; 7600.0; 0.0];
@@ -74,6 +112,16 @@ classdef AtmosphereProductsTest < matlab.unittest.TestCase
         end
 
         function atmosphereVelocityUsesEarthCorotation(testCase)
+            % Description:
+            %   Verifies that the atmosphere velocity product follows the
+            %   configured Earth corotation model.
+            %
+            % Arguments:
+            %   testCase - matlab.unittest.TestCase instance.
+            %
+            % Outputs:
+            %   None.
+
             config = nominalEnvironmentConfig(1.0, true);
             r_I_m = [6871000.0; 1000.0; -2000.0];
             v_I_m_s = [0.0; 7600.0; 0.0];
@@ -90,6 +138,16 @@ classdef AtmosphereProductsTest < matlab.unittest.TestCase
         end
 
         function fallbackDensityDecreasesWithAltitude(testCase)
+            % Description:
+            %   Checks the fallback exponential-density model for monotonic
+            %   decrease over representative LEO altitudes.
+            %
+            % Arguments:
+            %   testCase - matlab.unittest.TestCase instance.
+            %
+            % Outputs:
+            %   None.
+
             config = nominalEnvironmentConfig(1.0, false);
             r_I_m = [6871000.0; 0.0; 0.0];
             v_I_m_s = [0.0; 7600.0; 0.0];
@@ -104,6 +162,16 @@ classdef AtmosphereProductsTest < matlab.unittest.TestCase
         end
 
         function disabledAtmosphereZerosProducts(testCase)
+            % Description:
+            %   Verifies that disabling the atmosphere model zeros all published
+            %   atmosphere products.
+            %
+            % Arguments:
+            %   testCase - matlab.unittest.TestCase instance.
+            %
+            % Outputs:
+            %   None.
+
             config = nominalEnvironmentConfig(1.0, true);
             config.atmosphere_enabled = 0.0;
 
@@ -120,6 +188,16 @@ classdef AtmosphereProductsTest < matlab.unittest.TestCase
 end
 
 function config = nominalEnvironmentConfig(rhoScaleFactor, uncertaintyEnabled)
+% Description:
+%   Builds a representative environment-config struct for atmosphere tests.
+%
+% Arguments:
+%   rhoScaleFactor - Density scale factor applied by computeAtmosphereProducts.
+%   uncertaintyEnabled - Logical flag enabling density uncertainty output.
+%
+% Outputs:
+%   config - Struct matching the atmosphere configuration bus fields.
+
 config = struct();
 config.atmosphere_enabled = 1.0;
 config.atmosphere_model_id = 1.0;
@@ -136,6 +214,15 @@ config.hp60 = 2.0;
 end
 
 function context = nominalEnvironmentContext()
+% Description:
+%   Builds a representative environment-context struct for atmosphere tests.
+%
+% Arguments:
+%   None.
+%
+% Outputs:
+%   context - Struct matching the environment context bus fields.
+
 context = struct();
 context.epoch_utc = [2026.0; 1.0; 1.0; 0.0; 0.0; 0.0];
 context.t_s = 0.0;

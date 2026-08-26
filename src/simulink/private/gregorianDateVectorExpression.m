@@ -1,0 +1,19 @@
+function value = gregorianDateVectorExpression(epochUtc)
+% Description:
+%   Formats a UTC vector for Orbit Propagator mask fields when the block
+%   time format is Gregorian date.
+%
+% Arguments:
+%   epochUtc - 6-by-1 UTC vector [year month day hour minute second]'.
+%
+% Outputs:
+%   value - Character vector expression, e.g. [2026 1 1 0 0 0].
+
+value = sprintf("[%s %s %s %s %s %s]", ...
+    integerString(epochUtc(1)), ...
+    integerString(epochUtc(2)), ...
+    integerString(epochUtc(3)), ...
+    integerString(epochUtc(4)), ...
+    integerString(epochUtc(5)), ...
+    numericString(epochUtc(6)));
+end

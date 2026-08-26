@@ -9,9 +9,7 @@ function figures = plot_attitude_results(resultsFile)
 % Outputs:
 %   figures - Handles to the generated MATLAB figures.
 
-projectRoot = fileparts(mfilename("fullpath"));
-addpath(fullfile(projectRoot, "src", "config"));
-addpath(fullfile(projectRoot, "src", "analysis"));
+projectRoot = setupAocsPaths();
 
 AOCS = loadAocsSimulationConfig(fullfile(projectRoot, "config", "AocsSimulationConfig.json"), projectRoot);
 

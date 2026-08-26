@@ -13,9 +13,7 @@ function report = validate_aocs_results(resultsFile)
 %   report - Struct with source name, energy drift, momentum drift,
 %            disturbance-torque magnitude, and conservation diagnostics.
 
-projectRoot = fileparts(mfilename("fullpath"));
-addpath(fullfile(projectRoot, "src", "config"));
-addpath(fullfile(projectRoot, "src", "analysis"));
+projectRoot = setupAocsPaths();
 
 defaultAOCS = loadAocsSimulationConfig(fullfile(projectRoot, "config", "AocsSimulationConfig.json"), projectRoot);
 

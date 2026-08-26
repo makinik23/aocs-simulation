@@ -16,16 +16,12 @@ classdef SwarmMagneticValidationTest < matlab.unittest.TestCase
             % Outputs:
             %   None.
 
-            testCase.ProjectRoot = fileparts(fileparts(fileparts(mfilename("fullpath"))));
+            testCase.ProjectRoot = projectRoot();
             testCase.DataFile = fullfile(testCase.ProjectRoot, ...
                 "validation", "swarm", "data", ...
                 "swarm_a_mag_lr_20240101_0000_0015.nc");
 
-            addpath(testCase.ProjectRoot);
-            addpath(fullfile(testCase.ProjectRoot, "src", "analysis"));
-            addpath(fullfile(testCase.ProjectRoot, "src", "config"));
-            addpath(fullfile(testCase.ProjectRoot, "src", "simulink"));
-            addpath(fullfile(testCase.ProjectRoot, "tests", "harnesses"));
+            setupAocsPaths(testCase.ProjectRoot, true);
         end
     end
 
@@ -260,6 +256,13 @@ end
 function result = runSwarmSimulinkValidation(projectRoot, dataFile)
 % Description:
 %   Configures and runs the geomagnetic-field harness from the Swarm track.
+%
+% Arguments:
+%   projectRoot - Project root containing config/, src/, models/, and tests/.
+%   dataFile - Path to the Swarm NetCDF fixture.
+%
+% Outputs:
+%   result - Struct containing Simulink outputs and validation error histories.
 
 projectRoot = string(projectRoot);
 data = readSwarmMagneticFixture(dataFile);
@@ -279,7 +282,7 @@ end
 load_system(AOCS.Model.File);
 applyAocsSimulationSettings(AOCS.Model.Name, AOCS);
 sltest.harness.open(owner, harnessName);
-cleanup = onCleanup(@() closeSwarmHarness(AOCS.Model.Name, harnessName));
+cleanup = onCleanup(@() closeHarnessAndModel(owner, harnessName, AOCS.Model.Name));
 
 inputDataset = swarmHarnessInputDataset(data, swarmR_I_m, AOCS);
 simIn = Simulink.SimulationInput(harnessName);
@@ -332,6 +335,13 @@ end
 function configFile = writeSwarmHarnessConfig(projectRoot, data)
 % Description:
 %   Writes a temporary config matching the Swarm fixture epoch/span.
+%
+% Arguments:
+%   projectRoot - Project root containing the base AOCS configuration.
+%   data - Struct returned by readSwarmMagneticFixture.
+%
+% Outputs:
+%   configFile - Path to the temporary JSON scenario file.
 
 startUtc = datevec(data.TimeUtc(1));
 config = struct();
@@ -371,6 +381,14 @@ end
 function inputDataset = swarmHarnessInputDataset(data, r_I_m, AOCS)
 % Description:
 %   Builds the flattened root-Inport dataset for SwarmGeomagneticHarness.
+%
+% Arguments:
+%   data - Struct returned by readSwarmMagneticFixture.
+%   r_I_m - N-by-3 Swarm inertial position samples [m].
+%   AOCS - Validated configuration struct.
+%
+% Outputs:
+%   inputDataset - Simulink external-input Dataset for the harness.
 
 time_s = data.Timestamp_s(:);
 sampleCount = data.SampleCount;
@@ -402,17 +420,16 @@ inputDataset = inputDataset.addElement(namedTimeseries("OrbitState_r_I_m", r_I_m
 inputDataset = inputDataset.addElement(namedTimeseries("OrbitState_v_I_m_s", swarmVelocityTrack(r_I_m, time_s), time_s));
 end
 
-function ts = namedTimeseries(name, values, time_s)
-% Description:
-%   Creates a named timeseries for a flattened harness root Inport.
-
-ts = timeseries(values, time_s(:));
-ts.Name = char(name);
-end
-
 function v_I_m_s = swarmVelocityTrack(r_I_m, time_s)
 % Description:
 %   Estimates inertial velocity samples for the OrbitState bus.
+%
+% Arguments:
+%   r_I_m - N-by-3 inertial position samples [m].
+%   time_s - N-by-1 sample times [s].
+%
+% Outputs:
+%   v_I_m_s - N-by-3 finite-difference inertial velocity samples [m/s].
 
 time_s = time_s(:);
 v_I_m_s = zeros(size(r_I_m));
@@ -424,28 +441,28 @@ end
 function decimalYear = swarmDecimalYear(timeUtc)
 % Description:
 %   Converts UTC datetimes to decimal years for the Simulink IGRF block.
+%
+% Arguments:
+%   timeUtc - UTC datetime vector.
+%
+% Outputs:
+%   decimalYear - N-by-1 decimal-year vector.
 
 utc = datevec(timeUtc);
 decimalYear = decyear(utc(:, 1), utc(:, 2), utc(:, 3), utc(:, 4), utc(:, 5), utc(:, 6));
 decimalYear = decimalYear(:);
 end
 
-function closeSwarmHarness(modelName, harnessName)
-% Description:
-%   Closes the harness and owner model without saving test-time parameter edits.
-
-if bdIsLoaded(harnessName)
-    close_system(harnessName, 0);
-end
-
-if bdIsLoaded(modelName)
-    close_system(modelName, 0);
-end
-end
-
 function r_I_m = swarmEciTrack(data, earthOrientation)
 % Description:
 %   Converts the Swarm geocentric ITRF track into the project inertial frame.
+%
+% Arguments:
+%   data - Struct returned by readSwarmMagneticFixture.
+%   earthOrientation - Earth orientation parameters from the AOCS config.
+%
+% Outputs:
+%   r_I_m - N-by-3 inertial position samples [m].
 
 r_ECEF_m = swarmEcefTrack(data.Latitude_deg, data.Longitude_deg, data.Radius_m);
 utc = datevec(data.TimeUtc);
@@ -460,6 +477,13 @@ end
 function C_ECEF_I = highAccuracyEciToEcefDcm(utc, earthOrientation)
 % Description:
 %   Applies the same IAU-2000/2006 EOP inputs used by the Simulink blocks.
+%
+% Arguments:
+%   utc - UTC date vector accepted by dcmeci2ecef.
+%   earthOrientation - Earth orientation parameters from the AOCS config.
+%
+% Outputs:
+%   C_ECEF_I - 3-by-3 DCM mapping inertial components into ECEF components.
 
 C_ECEF_I = dcmeci2ecef("IAU-2000/2006", utc, ...
     earthOrientation.DeltaAT_s, ...
@@ -471,6 +495,14 @@ end
 function r_ECEF_m = swarmEcefTrack(latitude_deg, longitude_deg, radius_m)
 % Description:
 %   Converts geocentric latitude, longitude, and radius to ECEF position.
+%
+% Arguments:
+%   latitude_deg - N-by-1 geocentric latitude [deg].
+%   longitude_deg - N-by-1 geocentric longitude [deg].
+%   radius_m - N-by-1 geocentric radius [m].
+%
+% Outputs:
+%   r_ECEF_m - N-by-3 ECEF position samples [m].
 
 x_m = radius_m .* cosd(latitude_deg) .* cosd(longitude_deg);
 y_m = radius_m .* cosd(latitude_deg) .* sind(longitude_deg);
@@ -481,6 +513,15 @@ end
 function B_NEC_nT = inertialBToSwarmNec(B_I_T, r_I_m, timeUtc, earthOrientation)
 % Description:
 %   Converts harness inertial magnetic-field samples into Swarm geocentric NEC.
+%
+% Arguments:
+%   B_I_T - N-by-3 inertial magnetic-field samples [T].
+%   r_I_m - N-by-3 inertial position samples [m].
+%   timeUtc - UTC datetime vector.
+%   earthOrientation - Earth orientation parameters from the AOCS config.
+%
+% Outputs:
+%   B_NEC_nT - N-by-3 magnetic-field samples in Swarm NEC axes [nT].
 
 utc = datevec(timeUtc);
 B_NEC_nT = zeros(size(B_I_T));
@@ -498,6 +539,13 @@ end
 function [latitude_deg, longitude_deg] = geocentricLatLonFromEcef(r_ECEF_m)
 % Description:
 %   Computes geocentric latitude and longitude from an ECEF position vector.
+%
+% Arguments:
+%   r_ECEF_m - 3-by-1 ECEF position vector [m].
+%
+% Outputs:
+%   latitude_deg - Geocentric latitude [deg].
+%   longitude_deg - Geocentric longitude [deg].
 
 r = r_ECEF_m(:);
 longitude_deg = atan2d(r(2), r(1));
@@ -507,6 +555,15 @@ end
 function [B_I_time_s, B_I_T, B_B_time_s, B_B_T] = harnessMagneticFieldOutputWithTime(simOut)
 % Description:
 %   Reads B_I_T and B_B_T from the harness MagneticField bus output.
+%
+% Arguments:
+%   simOut - Simulink.SimulationOutput returned by the Swarm harness run.
+%
+% Outputs:
+%   B_I_time_s - Sample times for inertial magnetic-field output [s].
+%   B_I_T - N-by-3 inertial magnetic-field samples [T].
+%   B_B_time_s - Sample times for body magnetic-field output [s].
+%   B_B_T - N-by-3 body magnetic-field samples [T].
 
 yout = simOut.get("yout");
 [B_I_time_s, B_I_T] = outputVectorByAnyName(yout, ["B_I_T", "MagneticField.B_I_T", "MagneticField_B_I_T"]);
@@ -516,6 +573,14 @@ end
 function [time_s, data] = outputVectorByAnyName(yout, candidateNames)
 % Description:
 %   Finds a vector output in a Dataset, including nested bus Dataset values.
+%
+% Arguments:
+%   yout - Simulink Dataset containing harness outputs.
+%   candidateNames - String array of accepted output names.
+%
+% Outputs:
+%   time_s - Output sample times [s].
+%   data - N-by-3 output vector samples.
 
 [found, time_s, data] = tryDatasetNames(yout, candidateNames);
 if found
@@ -557,6 +622,15 @@ end
 function [found, time_s, data] = tryDatasetNames(dataset, candidateNames)
 % Description:
 %   Attempts to read a named vector timeseries from a Dataset.
+%
+% Arguments:
+%   dataset - Simulink Dataset to search.
+%   candidateNames - String array of accepted output names.
+%
+% Outputs:
+%   found - True when a matching vector output was found.
+%   time_s - Output sample times [s] or [].
+%   data - N-by-3 output vector samples or [].
 
 found = false;
 time_s = [];
@@ -593,6 +667,15 @@ end
 function [found, time_s, data] = tryStructValues(values, candidateNames)
 % Description:
 %   Attempts to read a named timeseries field from a struct-valued bus output.
+%
+% Arguments:
+%   values - Struct-valued bus output.
+%   candidateNames - String array of accepted output names.
+%
+% Outputs:
+%   found - True when a matching field was found.
+%   time_s - Output sample times [s] or [].
+%   data - N-by-3 output vector samples or [].
 
 found = false;
 time_s = [];
@@ -617,6 +700,15 @@ end
 function [found, time_s, data] = tryStructTimeseries(values, candidateNames)
 % Description:
 %   Attempts to read a named field from a struct-valued bus timeseries.
+%
+% Arguments:
+%   values - Timeseries whose Data field is a struct.
+%   candidateNames - String array of accepted output names.
+%
+% Outputs:
+%   found - True when a matching field was found.
+%   time_s - Output sample times [s] or [].
+%   data - N-by-3 output vector samples or [].
 
 found = false;
 time_s = [];
@@ -694,6 +786,13 @@ end
 function values = readNetcdfVector(dataFile, variableName)
 % Description:
 %   Reads a NetCDF variable as an N-by-1 double vector.
+%
+% Arguments:
+%   dataFile - Path to the Swarm NetCDF fixture.
+%   variableName - NetCDF variable name to read.
+%
+% Outputs:
+%   values - N-by-1 double vector.
 
 values = double(ncread(dataFile, variableName));
 values = values(:);
@@ -702,6 +801,14 @@ end
 function matrix = readNetcdfMatrix(dataFile, variableName, expectedColumns)
 % Description:
 %   Reads a NetCDF variable as an N-by-M double matrix.
+%
+% Arguments:
+%   dataFile - Path to the Swarm NetCDF fixture.
+%   variableName - NetCDF variable name to read.
+%   expectedColumns - Expected number of output columns.
+%
+% Outputs:
+%   matrix - N-by-expectedColumns double matrix.
 
 matrix = squeeze(double(ncread(dataFile, variableName)));
 
@@ -728,6 +835,13 @@ end
 function values = readStringVariable(dataFile, variableName)
 % Description:
 %   Reads a NetCDF string or character variable as a string column vector.
+%
+% Arguments:
+%   dataFile - Path to the Swarm NetCDF fixture.
+%   variableName - NetCDF variable name to read.
+%
+% Outputs:
+%   values - N-by-1 string vector.
 
 raw = ncread(dataFile, variableName);
 
@@ -747,6 +861,13 @@ end
 function units = readVariableUnits(dataFile, variableName)
 % Description:
 %   Reads the NetCDF units attribute for a variable.
+%
+% Arguments:
+%   dataFile - Path to the Swarm NetCDF fixture.
+%   variableName - NetCDF variable name whose units attribute is read.
+%
+% Outputs:
+%   units - Units attribute as a string scalar.
 
 units = string(ncreadatt(dataFile, variableName, "units"));
 end
@@ -754,6 +875,13 @@ end
 function timeUtc = readNetcdfUtcTime(dataFile, variableName)
 % Description:
 %   Reads a NetCDF time variable stored as seconds since a UTC epoch.
+%
+% Arguments:
+%   dataFile - Path to the Swarm NetCDF fixture.
+%   variableName - NetCDF time variable name to read.
+%
+% Outputs:
+%   timeUtc - UTC datetime vector.
 
 values_s = readNetcdfVector(dataFile, variableName);
 units = string(ncreadatt(dataFile, variableName, "units"));
@@ -773,6 +901,14 @@ end
 function assertSampleCount(data, variableName, values)
 % Description:
 %   Verifies that a sample-indexed variable has the fixture sample count.
+%
+% Arguments:
+%   data - Struct returned by readSwarmMagneticFixture.
+%   variableName - Name used in the failure message.
+%   values - Sample-indexed variable to validate.
+%
+% Outputs:
+%   None.
 
 if size(values, 1) ~= data.SampleCount
     error("AOCS:Tests:UnexpectedSampleCount", ...
@@ -784,6 +920,14 @@ end
 function lla = swarmGeocentricToLla(latitude_deg, longitude_deg, radius_m)
 % Description:
 %   Converts Swarm geocentric ITRF latitude/longitude/radius to geodetic LLA.
+%
+% Arguments:
+%   latitude_deg - N-by-1 geocentric latitude [deg].
+%   longitude_deg - N-by-1 geocentric longitude [deg].
+%   radius_m - N-by-1 geocentric radius [m].
+%
+% Outputs:
+%   lla - N-by-3 geodetic latitude/longitude/altitude matrix.
 
 x_m = radius_m .* cosd(latitude_deg) .* cosd(longitude_deg);
 y_m = radius_m .* cosd(latitude_deg) .* sind(longitude_deg);
@@ -795,6 +939,13 @@ function [B_NEC_nT, F_nT] = computeMatlabIgrfNec(data)
 % Description:
 %   Computes MATLAB IGRF-14 in geodetic NED coordinates and transforms it
 %   into the Swarm geocentric NEC frame.
+%
+% Arguments:
+%   data - Struct returned by readSwarmMagneticFixture.
+%
+% Outputs:
+%   B_NEC_nT - N-by-3 MATLAB IGRF magnetic field in Swarm NEC axes [nT].
+%   F_nT - N-by-1 magnetic-field norm [nT].
 
 lla = swarmGeocentricToLla(data.Latitude_deg, data.Longitude_deg, data.Radius_m);
 utc = datevec(data.TimeUtc);
@@ -816,6 +967,13 @@ end
 function C_NEC_ECEF = geocentricNecDcm(latitude_deg, longitude_deg)
 % Description:
 %   Builds the DCM mapping ECEF vector components into Swarm geocentric NEC.
+%
+% Arguments:
+%   latitude_deg - Geocentric latitude [deg].
+%   longitude_deg - Geocentric longitude [deg].
+%
+% Outputs:
+%   C_NEC_ECEF - 3-by-3 DCM mapping ECEF components into NEC components.
 
 lat_rad = deg2rad(latitude_deg);
 lon_rad = deg2rad(longitude_deg);
@@ -830,6 +988,12 @@ end
 function text = formatUtcForReport(timeUtc)
 % Description:
 %   Formats a UTC datetime for deterministic test-console reporting.
+%
+% Arguments:
+%   timeUtc - UTC datetime scalar.
+%
+% Outputs:
+%   text - Formatted UTC string scalar.
 
 value = datevec(timeUtc);
 text = string(sprintf('%04.0f-%02.0f-%02.0f %02.0f:%02.0f:%02.0f UTC', ...
@@ -839,6 +1003,14 @@ end
 function printRange(label, values, units)
 % Description:
 %   Prints minimum and maximum for a numeric vector.
+%
+% Arguments:
+%   label - Label printed before the numeric range.
+%   values - Numeric values to summarize.
+%   units - Units label printed after the numeric range.
+%
+% Outputs:
+%   None.
 
 values = finiteColumn(values);
 fprintf('  %-38s min %12.3f  max %12.3f %s\n', ...
@@ -848,6 +1020,14 @@ end
 function printDistribution(label, values, units)
 % Description:
 %   Prints median, 95th percentile, and maximum for a numeric vector.
+%
+% Arguments:
+%   label - Label printed before the distribution statistics.
+%   values - Numeric values to summarize.
+%   units - Units label printed after the statistics.
+%
+% Outputs:
+%   None.
 
 values = finiteColumn(values);
 fprintf('  %-38s median %12.3f  p95 %12.3f  max %12.3f %s\n', ...
@@ -857,6 +1037,12 @@ end
 function values = finiteColumn(values)
 % Description:
 %   Returns finite numeric values as a column vector.
+%
+% Arguments:
+%   values - Numeric values to filter and reshape.
+%
+% Outputs:
+%   values - Finite values as a column vector.
 
 values = values(:);
 values = values(isfinite(values));
@@ -869,6 +1055,12 @@ end
 function text = formatValueCounts(values)
 % Description:
 %   Formats unique numeric values and their counts as a compact string.
+%
+% Arguments:
+%   values - Numeric values whose unique counts should be formatted.
+%
+% Outputs:
+%   text - Comma-separated value:count string.
 
 values = finiteColumn(double(values));
 uniqueValues = unique(values).';
@@ -884,6 +1076,13 @@ end
 function value = nearestPercentile(samples, percentile)
 % Description:
 %   Computes a nearest-rank percentile without requiring Statistics Toolbox.
+%
+% Arguments:
+%   samples - Numeric samples.
+%   percentile - Percentile in the range 0..100.
+%
+% Outputs:
+%   value - Nearest-rank percentile value.
 
 samples = sort(samples(:));
 samples = samples(isfinite(samples));

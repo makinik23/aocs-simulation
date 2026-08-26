@@ -11,9 +11,7 @@ function figures = plot_orbit_environment_results(resultsFile, exportDirectory)
 % Outputs:
 %   figures - Handles to the generated MATLAB figures.
 
-projectRoot = fileparts(mfilename("fullpath"));
-addpath(fullfile(projectRoot, "src", "analysis"));
-addpath(fullfile(projectRoot, "src", "config"));
+projectRoot = setupAocsPaths();
 
 AOCS = loadAocsSimulationConfig(fullfile(projectRoot, "config", "AocsSimulationConfig.json"), projectRoot);
 
@@ -40,115 +38,35 @@ v_I_m_s = loggedVector(logsout, "v_I_m_s", 3);
 B_NED_T = loggedVector(logsout, "B_NED_T", 3);
 B_I_T = loggedVector(logsout, "B_I_T", 3);
 B_B_T = loggedVector(logsout, "B_B_T", 3);
-M_rmm_B_Nm = loggedVector(logsout, "M_rmm_B_Nm", 3);
-M_gg_B_Nm = loggedVector(logsout, "M_gg_B_Nm", 3);
-M_srp_B_Nm = loggedVector(logsout, "M_srp_B_Nm", 3);
-M_dist_B_Nm = loggedVector(logsout, "M_dist_B_Nm", 3);
+zeroTorque_Nm = zeros(numel(t_s), 3);
+zeroForce_N = zeros(numel(t_s), 3);
+zeroAcceleration_m_s2 = zeros(numel(t_s), 3);
+M_rmm_B_Nm = loggedVector(logsout, "M_rmm_B_Nm", 3, zeroTorque_Nm);
+M_gg_B_Nm = loggedVector(logsout, "M_gg_B_Nm", 3, zeroTorque_Nm);
+M_srp_B_Nm = loggedVector(logsout, "M_srp_B_Nm", 3, zeroTorque_Nm);
+M_dist_B_Nm = loggedVector(logsout, "M_dist_B_Nm", 3, zeroTorque_Nm);
+F_srp_B_N = loggedVector(logsout, "F_srp_B_N", 3, zeroForce_N);
+F_srp_I_N = loggedVector(logsout, "F_srp_I_N", 3, zeroForce_N);
+a_srp_I_m_s2 = loggedVector(logsout, "a_srp_I_m_s2", 3, zeroAcceleration_m_s2);
+a_aero_I_m_s2 = loggedVector(logsout, "a_aero_I_m_s2", 3, zeroAcceleration_m_s2);
+a_dist_I_m_s2 = loggedVector(logsout, "a_dist_I_m_s2", 3, zeroAcceleration_m_s2);
 
 orbit = computeOrbitDiagnostics(r_I_m, v_I_m_s, AOCS);
 lla = computeLlaProducts(r_I_m, t_s, AOCS);
+summary = computeDisturbanceSummary(B_NED_T, B_I_T, B_B_T, ...
+    M_rmm_B_Nm, M_gg_B_Nm, M_srp_B_Nm, M_dist_B_Nm, ...
+    F_srp_B_N, F_srp_I_N, a_srp_I_m_s2, a_aero_I_m_s2, a_dist_I_m_s2);
 
 figures = gobjects(4, 1);
 figures(1) = plotInertialOrbit3d(r_I_m, t_min, orbit, AOCS);
 figures(2) = plotOrbitKinematics(t_min, orbit);
 figures(3) = plotGroundTrackAndLla(t_min, lla, orbit);
 figures(4) = plotEnvironmentProducts(t_min, B_NED_T, B_I_T, B_B_T, ...
-    M_rmm_B_Nm, M_gg_B_Nm, M_srp_B_Nm, M_dist_B_Nm);
+    M_rmm_B_Nm, M_gg_B_Nm, M_srp_B_Nm, M_dist_B_Nm, ...
+    F_srp_B_N, F_srp_I_N, a_srp_I_m_s2, a_aero_I_m_s2, a_dist_I_m_s2);
 
-printSummary(orbit, B_NED_T, B_I_T, B_B_T, M_rmm_B_Nm, M_gg_B_Nm, M_srp_B_Nm, M_dist_B_Nm);
+printSummary(orbit, summary);
 exportFigures(figures, exportDirectory);
-end
-
-function data = loggedVector(logsout, signalName, width)
-% Description:
-%   Reads a logged vector signal and returns an N-by-width matrix.
-%
-% Arguments:
-%   logsout - Simulink logsout dataset.
-%   signalName - Logged signal name.
-%   width - Expected vector width.
-%
-% Outputs:
-%   data - N-by-width numeric matrix.
-
-element = logsout.getElement(char(signalName));
-if isempty(element)
-    error("AOCS:Analysis:MissingSignal", "Missing logged signal '%s'.", char(signalName));
-end
-
-data = loggedSignalMatrix(element.Values.Data, width, signalName);
-end
-
-function orbit = computeOrbitDiagnostics(r_I_m, v_I_m_s, AOCS)
-% Description:
-%   Computes scalar orbit diagnostics useful for plotting and sanity checks.
-%
-% Arguments:
-%   r_I_m - N-by-3 inertial position samples [m].
-%   v_I_m_s - N-by-3 inertial velocity samples [m/s].
-%   AOCS - Validated configuration struct.
-%
-% Outputs:
-%   orbit - Struct of orbit diagnostics.
-
-mu = AOCS.Orbit.CentralBodyConstants.mu_m3_s2;
-earthRadius_m = AOCS.Orbit.CentralBodyConstants.radius_m;
-
-rNorm_m = vecnorm(r_I_m, 2, 2);
-vNorm_m_s = vecnorm(v_I_m_s, 2, 2);
-rHat_I = r_I_m ./ rNorm_m;
-
-radialSpeed_m_s = sum(r_I_m .* v_I_m_s, 2) ./ rNorm_m;
-tangentialSpeed_m_s = sqrt(max(vNorm_m_s.^2 - radialSpeed_m_s.^2, 0));
-
-h_I_m2_s = cross(r_I_m, v_I_m_s, 2);
-hNorm_m2_s = vecnorm(h_I_m2_s, 2, 2);
-inclination_rad = acos(clamp(h_I_m2_s(:, 3) ./ hNorm_m2_s, -1, 1));
-
-specificEnergy_J_kg = 0.5 .* vNorm_m_s.^2 - mu ./ rNorm_m;
-semiMajorAxis_m = -mu ./ (2 .* specificEnergy_J_kg);
-eccentricityVector = cross(v_I_m_s, h_I_m2_s, 2) ./ mu - rHat_I;
-eccentricity = vecnorm(eccentricityVector, 2, 2);
-period_s = 2 * pi * sqrt(mean(semiMajorAxis_m, "omitnan")^3 / mu);
-
-orbit = struct();
-orbit.Radius_m = rNorm_m;
-orbit.Altitude_m = rNorm_m - earthRadius_m;
-orbit.Speed_m_s = vNorm_m_s;
-orbit.RadialSpeed_m_s = radialSpeed_m_s;
-orbit.TangentialSpeed_m_s = tangentialSpeed_m_s;
-orbit.SpecificEnergy_J_kg = specificEnergy_J_kg;
-orbit.SpecificAngularMomentum_m2_s = hNorm_m2_s;
-orbit.SemiMajorAxis_m = semiMajorAxis_m;
-orbit.Eccentricity = eccentricity;
-orbit.Inclination_rad = inclination_rad;
-orbit.EstimatedPeriod_s = period_s;
-end
-
-function lla = computeLlaProducts(r_I_m, t_s, AOCS)
-% Description:
-%   Converts inertial position samples to geodetic latitude, longitude, and
-%   altitude using the same IAU-2000/2006 reduction family used in the model.
-%
-% Arguments:
-%   r_I_m - N-by-3 inertial position samples [m].
-%   t_s - N-by-1 simulation time samples [s].
-%   AOCS - Validated configuration struct.
-%
-% Outputs:
-%   lla - Struct with Latitude_deg, Longitude_deg, and Altitude_m.
-
-epoch = AOCS.Epoch.Utc;
-epochDate = datetime(epoch(1), epoch(2), epoch(3), epoch(4), epoch(5), epoch(6), ...
-    "TimeZone", "UTC");
-utc = datevec(epochDate + seconds(t_s));
-
-llaData = eci2lla(r_I_m, utc, "IAU-2000/2006");
-
-lla = struct();
-lla.Latitude_deg = llaData(:, 1);
-lla.Longitude_deg = wrapDegrees180(llaData(:, 2));
-lla.Altitude_m = llaData(:, 3);
 end
 
 function fig = plotInertialOrbit3d(r_I_m, t_min, orbit, AOCS)
@@ -307,9 +225,10 @@ styleAxes(gca)
 end
 
 function fig = plotEnvironmentProducts(t_min, B_NED_T, B_I_T, B_B_T, ...
-    M_rmm_B_Nm, M_gg_B_Nm, M_srp_B_Nm, M_dist_B_Nm)
+    M_rmm_B_Nm, M_gg_B_Nm, M_srp_B_Nm, M_dist_B_Nm, ...
+    F_srp_B_N, F_srp_I_N, a_srp_I_m_s2, a_aero_I_m_s2, a_dist_I_m_s2)
 % Description:
-%   Plots magnetic-field products and disturbance torques.
+%   Plots magnetic-field products, disturbance torques, and orbit accelerations.
 
 B_NED_uT = B_NED_T .* 1e6;
 B_I_uT = B_I_T .* 1e6;
@@ -318,10 +237,15 @@ M_rmm_nNm = M_rmm_B_Nm .* 1e9;
 M_gg_nNm = M_gg_B_Nm .* 1e9;
 M_srp_nNm = M_srp_B_Nm .* 1e9;
 M_dist_nNm = M_dist_B_Nm .* 1e9;
+F_srp_B_nN = F_srp_B_N .* 1e9;
+F_srp_I_nN = F_srp_I_N .* 1e9;
+a_srp_nm_s2 = a_srp_I_m_s2 .* 1e9;
+a_aero_nm_s2 = a_aero_I_m_s2 .* 1e9;
+a_dist_nm_s2 = a_dist_I_m_s2 .* 1e9;
 
-fig = figure("Name", "Orbit environment - magnetic field and torques", "Color", "w");
-layout = tiledlayout(fig, 3, 2, "TileSpacing", "compact", "Padding", "compact");
-title(layout, "Magnetic field and disturbance torque products")
+fig = figure("Name", "Orbit environment - fields and disturbances", "Color", "w");
+layout = tiledlayout(fig, 4, 2, "TileSpacing", "compact", "Padding", "compact");
+title(layout, "Magnetic field and disturbance products")
 
 nexttile
 plot(t_min, B_NED_uT, "LineWidth", 1.1)
@@ -383,9 +307,32 @@ ylabel("M_{dist,B} [nN*m]")
 title("Total disturbance torque components")
 legend("x", "y", "z", "Location", "best")
 styleAxes(gca)
+
+nexttile
+plot(t_min, vecnorm(F_srp_B_nN, 2, 2), "LineWidth", 1.1)
+hold on
+plot(t_min, vecnorm(F_srp_I_nN, 2, 2), "--", "LineWidth", 1.0)
+grid on
+xlabel("Time [min]")
+ylabel("|F_{SRP}| [nN]")
+title("SRP force norm by frame")
+legend("B", "I", "Location", "best")
+styleAxes(gca)
+
+nexttile
+plot(t_min, vecnorm(a_aero_nm_s2, 2, 2), "LineWidth", 1.2)
+hold on
+plot(t_min, vecnorm(a_srp_nm_s2, 2, 2), "LineWidth", 1.2)
+plot(t_min, vecnorm(a_dist_nm_s2, 2, 2), "LineWidth", 1.4)
+grid on
+xlabel("Time [min]")
+ylabel("|a| [nm/s^2]")
+title("Orbit disturbance acceleration norms")
+legend("aero", "SRP", "total", "Location", "best")
+styleAxes(gca)
 end
 
-function printSummary(orbit, B_NED_T, B_I_T, B_B_T, M_rmm_B_Nm, M_gg_B_Nm, M_srp_B_Nm, M_dist_B_Nm)
+function printSummary(orbit, summary)
 % Description:
 %   Prints a compact numerical summary matching the plotted diagnostics.
 
@@ -397,13 +344,33 @@ fprintf("Speed [m/s] min/mean/max   : %.6f / %.6f / %.6f\n", ...
 fprintf("a [km] mean, e mean, i mean: %.6f / %.9f / %.6f deg\n", ...
     mean(orbit.SemiMajorAxis_m) / 1000, mean(orbit.Eccentricity), mean(rad2deg(orbit.Inclination_rad)));
 fprintf("Period estimate [min]      : %.6f\n", orbit.EstimatedPeriod_s / 60);
-fprintf("|B_NED| [uT] min/mean/max  : %.6f / %.6f / %.6f\n", vectorNormStats(B_NED_T .* 1e6));
-fprintf("|B_I|-|B_B| max diff [T]   : %.3e\n", ...
-    max(abs(vecnorm(B_I_T, 2, 2) - vecnorm(B_B_T, 2, 2))));
-fprintf("|M_rmm| [nN*m] min/mean/max: %.6f / %.6f / %.6f\n", vectorNormStats(M_rmm_B_Nm .* 1e9));
-fprintf("|M_gg| [nN*m] min/mean/max : %.6f / %.6f / %.6f\n", vectorNormStats(M_gg_B_Nm .* 1e9));
-fprintf("|M_srp| [nN*m] min/mean/max: %.6f / %.6f / %.6f\n", vectorNormStats(M_srp_B_Nm .* 1e9));
-fprintf("|M_dist| [nN*m] min/mean/max: %.6f / %.6f / %.6f\n\n", vectorNormStats(M_dist_B_Nm .* 1e9));
+fprintf("|B_NED| [uT] min/mean/max  : %.6f / %.6f / %.6f\n", ...
+    summary.Magnetic.B_NED_norm_uT.Min, summary.Magnetic.B_NED_norm_uT.Mean, summary.Magnetic.B_NED_norm_uT.Max);
+fprintf("|B_I|-|B_B| max diff [T]   : %.3e\n", summary.Magnetic.B_I_B_norm_max_diff_T);
+fprintf("|M_rmm| [nN*m] min/mean/max: %.6f / %.6f / %.6f\n", ...
+    summary.Torques.M_rmm_norm_nNm.Min, summary.Torques.M_rmm_norm_nNm.Mean, summary.Torques.M_rmm_norm_nNm.Max);
+fprintf("|M_gg| [nN*m] min/mean/max : %.6f / %.6f / %.6f\n", ...
+    summary.Torques.M_gg_norm_nNm.Min, summary.Torques.M_gg_norm_nNm.Mean, summary.Torques.M_gg_norm_nNm.Max);
+fprintf("|M_srp| [nN*m] min/mean/max: %.6f / %.6f / %.6f\n", ...
+    summary.Torques.M_srp_norm_nNm.Min, summary.Torques.M_srp_norm_nNm.Mean, summary.Torques.M_srp_norm_nNm.Max);
+fprintf("|M_dist| [nN*m] min/mean/max: %.6f / %.6f / %.6f\n", ...
+    summary.Torques.M_dist_norm_nNm.Min, summary.Torques.M_dist_norm_nNm.Mean, summary.Torques.M_dist_norm_nNm.Max);
+if isfield(summary, "Forces")
+    fprintf("|F_srp| [nN] min/mean/max: %.6f / %.6f / %.6f\n", ...
+        summary.Forces.F_srp_I_norm_nN.Min, summary.Forces.F_srp_I_norm_nN.Mean, summary.Forces.F_srp_I_norm_nN.Max);
+    fprintf("|F_srp_B|-|F_srp_I| max diff [N]: %.3e\n", ...
+        summary.Forces.F_srp_B_I_norm_max_diff_N);
+end
+if isfield(summary, "Accelerations")
+    fprintf("|a_srp| [nm/s^2] min/mean/max: %.6f / %.6f / %.6f\n", ...
+        summary.Accelerations.a_srp_norm_nm_s2.Min, summary.Accelerations.a_srp_norm_nm_s2.Mean, ...
+        summary.Accelerations.a_srp_norm_nm_s2.Max);
+    fprintf("|a_dist| [nm/s^2] min/mean/max: %.6f / %.6f / %.6f\n\n", ...
+        summary.Accelerations.a_dist_norm_nm_s2.Min, summary.Accelerations.a_dist_norm_nm_s2.Mean, ...
+        summary.Accelerations.a_dist_norm_nm_s2.Max);
+else
+    fprintf("\n");
+end
 end
 
 function exportFigures(figures, exportDirectory)
@@ -425,14 +392,6 @@ for k = 1:numel(figures)
 end
 end
 
-function stats = vectorNormStats(data)
-% Description:
-%   Returns min/mean/max of vector norms in a row for fprintf expansion.
-
-norms = vecnorm(data, 2, 2);
-stats = [min(norms), mean(norms), max(norms)];
-end
-
 function [lonPlot, latPlot] = breakLongitudeWraps(lon_deg, lat_deg)
 % Description:
 %   Inserts NaNs at longitude wrap jumps so ground-track lines do not cross
@@ -447,20 +406,6 @@ for k = numel(wrapJumps):-1:1
     lonPlot = [lonPlot(1:idx-1); NaN; lonPlot(idx:end)]; %#ok<AGROW>
     latPlot = [latPlot(1:idx-1); NaN; latPlot(idx:end)]; %#ok<AGROW>
 end
-end
-
-function wrapped = wrapDegrees180(degrees)
-% Description:
-%   Wraps degrees to [-180, 180).
-
-wrapped = mod(degrees + 180, 360) - 180;
-end
-
-function value = clamp(value, lowerBound, upperBound)
-% Description:
-%   Clamps numeric values to a closed interval.
-
-value = min(max(value, lowerBound), upperBound);
 end
 
 function styleAxes(ax)

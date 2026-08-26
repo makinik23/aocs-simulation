@@ -10,10 +10,7 @@ function out = run_aocs_simulation(configFile)
 % Outputs:
 %   out - Simulink.SimulationOutput returned by the plant simulation.
 
-projectRoot = fileparts(mfilename("fullpath"));
-addpath(fullfile(projectRoot, "src", "config"));
-addpath(fullfile(projectRoot, "src", "simulink"));
-addpath(fullfile(projectRoot, "src", "environment"));
+projectRoot = setupAocsPaths();
 
 if nargin < 1 || strlength(string(configFile)) == 0
     configFile = fullfile(projectRoot, "config", "AocsSimulationConfig.json");
