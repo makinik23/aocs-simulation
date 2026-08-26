@@ -9,16 +9,22 @@ classdef Dtm2020AtmosphereHarnessTest < matlab.unittest.TestCase
 
     methods (TestClassSetup)
         function prepareModelAndHarness(testCase)
-            testCase.ProjectRoot = fileparts(fileparts(fileparts(mfilename("fullpath"))));
+            % Description:
+            %   Configures the plant model and opens the DTM2020 atmosphere
+            %   harness used by the test class.
+            %
+            % Arguments:
+            %   testCase - matlab.unittest.TestCase instance.
+            %
+            % Outputs:
+            %   None.
+
+            testCase.ProjectRoot = projectRoot();
             testCase.Owner = ...
                 "aocs_plant/Orbit & Environment/Environment Products/" + ...
                 "Atmosphere Products/Atmosphere Model/Atmosphere Products";
 
-            addpath(testCase.ProjectRoot);
-            addpath(fullfile(testCase.ProjectRoot, "src", "config"));
-            addpath(fullfile(testCase.ProjectRoot, "src", "simulink"));
-            addpath(fullfile(testCase.ProjectRoot, "src", "environment"));
-            addpath(fullfile(testCase.ProjectRoot, "tests", "harnesses"));
+            setupAocsPaths(testCase.ProjectRoot, true);
 
             testCase.AOCS = setupAocsSimulation(fullfile( ...
                 testCase.ProjectRoot, "config", "AocsSimulationConfig.json"));
@@ -35,20 +41,31 @@ classdef Dtm2020AtmosphereHarnessTest < matlab.unittest.TestCase
 
     methods (TestClassTeardown)
         function closeModelAndHarness(testCase)
-            try
-                sltest.harness.close( ...
-                    testCase.Owner, testCase.HarnessName);
-            catch
-            end
+            % Description:
+            %   Closes the DTM2020 atmosphere harness and owner plant model.
+            %
+            % Arguments:
+            %   testCase - matlab.unittest.TestCase instance.
+            %
+            % Outputs:
+            %   None.
 
-            if bdIsLoaded("aocs_plant")
-                close_system("aocs_plant", 0);
-            end
+            closeHarnessAndModel(testCase.Owner, testCase.HarnessName, "aocs_plant");
         end
     end
 
     methods (Test)
         function harnessHasExpectedInterface(testCase)
+            % Description:
+            %   Verifies that the atmosphere harness root ports match the
+            %   flattened bus contract expected by the test inputs.
+            %
+            % Arguments:
+            %   testCase - matlab.unittest.TestCase instance.
+            %
+            % Outputs:
+            %   None.
+
             inputs = rootPortNames(testCase.HarnessName, "Inport");
             outputs = rootPortNames(testCase.HarnessName, "Outport");
 
@@ -88,6 +105,16 @@ classdef Dtm2020AtmosphereHarnessTest < matlab.unittest.TestCase
         end
 
         function nominalCaseRunsThroughSFunction(testCase)
+            % Description:
+            %   Runs a nominal LEO sample through the DTM2020 S-Function harness
+            %   and checks basic product positivity/consistency.
+            %
+            % Arguments:
+            %   testCase - matlab.unittest.TestCase instance.
+            %
+            % Outputs:
+            %   None.
+
             time_s = [0; 1];
             sampleCount = numel(time_s);
         
@@ -99,14 +126,14 @@ classdef Dtm2020AtmosphereHarnessTest < matlab.unittest.TestCase
             lla = repmat([0, 0, 400e3], sampleCount, 1);
         
             inputDataset = Simulink.SimulationData.Dataset();
-            inputDataset = addInput(inputDataset, "r_I_m", r_I_m, time_s);
-            inputDataset = addInput(inputDataset, "v_I_m_s", v_I_m_s, time_s);
-            inputDataset = addInput(inputDataset, "lla", lla, time_s);
+            inputDataset = addHarnessInput(inputDataset, "r_I_m", r_I_m, time_s);
+            inputDataset = addHarnessInput(inputDataset, "v_I_m_s", v_I_m_s, time_s);
+            inputDataset = addHarnessInput(inputDataset, "lla", lla, time_s);
         
-            configBus = environmentConfigTimeseries(testCase.AOCS.EnvironmentConfig, time_s);
+            configBus = constantBusTimeseries(testCase.AOCS.EnvironmentConfig, time_s);
             inputDataset = inputDataset.addElement(configBus, "EnvironmentConfig");
         
-            inputDataset = addEnvironmentContext(inputDataset, testCase.AOCS, time_s);
+            inputDataset = addEnvironmentContextInputs(inputDataset, testCase.AOCS, time_s);
         
             simIn = Simulink.SimulationInput(testCase.HarnessName);
             simIn = simIn.setExternalInput(inputDataset);
@@ -139,6 +166,16 @@ classdef Dtm2020AtmosphereHarnessTest < matlab.unittest.TestCase
         end
 
         function pipelineMatchesFrozenCnesReference(testCase)
+            % Description:
+            %   Runs a benchmark atmosphere case through the full harness
+            %   pipeline and checks it against a frozen CNES DTM2020 reference.
+            %
+            % Arguments:
+            %   testCase - matlab.unittest.TestCase instance.
+            %
+            % Outputs:
+            %   None.
+
             time_s = [0;1];
             N = numel(time_s);
             benchmarkAOCS = testCase.AOCS;
@@ -165,14 +202,14 @@ classdef Dtm2020AtmosphereHarnessTest < matlab.unittest.TestCase
             lla = repmat([0; 0; 300e3], 1, N);
 
             inputDataset = Simulink.SimulationData.Dataset();
-            inputDataset = addInput(inputDataset, "r_I_m", r_I_m, time_s);
-            inputDataset = addInput(inputDataset, "v_I_m_s", v_I_m_s, time_s);
-            inputDataset = addInput(inputDataset, "lla", lla, time_s);
+            inputDataset = addHarnessInput(inputDataset, "r_I_m", r_I_m, time_s);
+            inputDataset = addHarnessInput(inputDataset, "v_I_m_s", v_I_m_s, time_s);
+            inputDataset = addHarnessInput(inputDataset, "lla", lla, time_s);
 
-            configBus = environmentConfigTimeseries(benchmarkAOCS.EnvironmentConfig, time_s);
+            configBus = constantBusTimeseries(benchmarkAOCS.EnvironmentConfig, time_s);
             inputDataset = inputDataset.addElement(configBus, "EnvironmentConfig");
         
-            inputDataset = addEnvironmentContext(inputDataset, benchmarkAOCS, time_s);
+            inputDataset = addEnvironmentContextInputs(inputDataset, benchmarkAOCS, time_s);
         
             simIn = Simulink.SimulationInput(testCase.HarnessName);
             simIn = simIn.setExternalInput(inputDataset);
@@ -220,109 +257,4 @@ classdef Dtm2020AtmosphereHarnessTest < matlab.unittest.TestCase
 
         end
     end
-end
-
-function names = rootPortNames(modelName, blockType)
-    blocks = find_system(modelName, ...
-        "SearchDepth", 1, "BlockType", blockType);
-    ports = cellfun(@(block) ...
-        str2double(get_param(block, "Port")), blocks);
-    [~, order] = sort(ports);
-    names = string(cellfun(@(block) ...
-        get_param(block, "Name"), blocks, ...
-        "UniformOutput", false));
-    names = names(order);
-end
-
-function dataset = addInput(dataset, name, values, time_s)
-    signal = timeseries(values, time_s);
-    signal.Name = name;
-    dataset = dataset.addElement(signal, name);
-end
-
-function bus = environmentConfigTimeseries(config, time_s)
-    bus = struct();
-    names = fieldnames(config);
-    
-    for k = 1:numel(names)
-        name = names{k};
-        bus.(name) = constantTimeseries(config.(name), time_s);
-    end
-end
-
-function signal = constantTimeseries(value, time_s)
-    sampleCount = numel(time_s);
-    
-    if isscalar(value)
-        data = repmat(value, sampleCount, 1);
-    elseif isrow(value)
-        data = repmat(value, sampleCount, 1);
-    else
-        data = repmat(value, 1, 1, sampleCount);
-    end
-    
-    signal = timeseries(data, time_s);
-end
-
-function dataset = addEnvironmentContext(dataset, AOCS, time_s)
-    sampleCount = numel(time_s);
-    epochUtc = AOCS.Epoch.Utc;
-    earthOrientation = AOCS.Environment.EarthOrientation;
-
-    epochDateTime = datetime( ...
-        epochUtc(1), epochUtc(2), epochUtc(3), ...
-        epochUtc(4), epochUtc(5), epochUtc(6), ...
-        "TimeZone", "UTC");
-
-    sampleDateTime = epochDateTime + seconds(time_s);
-    utc = datevec(sampleDateTime);
-
-    decimalYear = decyear( ...
-        utc(:, 1), utc(:, 2), utc(:, 3), ...
-        utc(:, 4), utc(:, 5), utc(:, 6));
-
-    dataset = addInput(dataset, ...
-        "EnvironmentContext_decimal_year", ...
-        decimalYear, time_s);
-    
-    dataset = addInput(dataset, ...
-        "EnvironmentContext_mu_m3_s2", ...
-        repmat(AOCS.Orbit.CentralBodyConstants.mu_m3_s2, ...
-            sampleCount, 1), ...
-        time_s);
-
-    dataset = addInput(dataset, ...
-        "EnvironmentContext_epoch_utc", ...
-        repmat(reshape(epochUtc, 6, 1), ...
-            1, 1, sampleCount), ...
-        time_s);
-    
-    dataset = addInput(dataset, ...
-        "EnvironmentContext_t_s", ...
-        time_s, time_s);
-    
-    dataset = addInput(dataset, ...
-        "EnvironmentContext_epoch_tdb_jd", ...
-        repmat(AOCS.Epoch.TdbJulianDate, sampleCount, 1), ...
-        time_s);
-    
-    dataset = addInput(dataset, ...
-        "EnvironmentContext_delta_at_s", ...
-        repmat(earthOrientation.DeltaAT_s, sampleCount, 1), ...
-        time_s);
-    
-    dataset = addInput(dataset, ...
-        "EnvironmentContext_delta_ut1_s", ...
-        repmat(earthOrientation.DeltaUT1_s, sampleCount, 1), ...
-        time_s);
-    
-    dataset = addInput(dataset, ...
-        "EnvironmentContext_polar_motion_rad", ...
-        repmat(earthOrientation.PolarMotion_rad, sampleCount, 1), ...
-        time_s);
-    
-    dataset = addInput(dataset, ...
-        "EnvironmentContext_d_cip_rad", ...
-        repmat(earthOrientation.DCIP_rad, sampleCount, 1), ...
-        time_s);
 end

@@ -6,14 +6,33 @@ classdef Dtm2020NativeTest < matlab.unittest.TestCase
 
     methods (TestClassSetup)
         function buildNativeBackend(testCase)
-            testCase.ProjectRoot = fileparts(fileparts(fileparts(mfilename("fullpath"))));
-            addpath(fullfile(testCase.ProjectRoot, "tools"));
+            % Description:
+            %   Builds or locates the native DTM2020 MEX backend for this test class.
+            %
+            % Arguments:
+            %   testCase - matlab.unittest.TestCase instance.
+            %
+            % Outputs:
+            %   None.
+
+            testCase.ProjectRoot = projectRoot();
+            setupAocsPaths(testCase.ProjectRoot, true);
             testCase.NativeArtifacts = buildDtm2020Native();
         end
     end
 
     methods (Test)
         function operationalBenchmarkMatchesCnesReference(testCase)
+            % Description:
+            %   Compares the native operational DTM2020 call against a frozen
+            %   CNES reference benchmark.
+            %
+            % Arguments:
+            %   testCase - matlab.unittest.TestCase instance.
+            %
+            % Outputs:
+            %   None.
+
             addpath(testCase.NativeArtifacts.BuildDirectory);
             clear dtm2020_mex;
             [rho, ~, localTemperature, exosphericTemperature] = dtm2020_mex( ...
@@ -27,6 +46,16 @@ classdef Dtm2020NativeTest < matlab.unittest.TestCase
         end
 
         function convertsAllSpeciesAndUncertainty(testCase)
+            % Description:
+            %   Verifies native DTM2020 output shape and positivity for density,
+            %   uncertainty, temperature, and species channels.
+            %
+            % Arguments:
+            %   testCase - matlab.unittest.TestCase instance.
+            %
+            % Outputs:
+            %   None.
+
             addpath(testCase.NativeArtifacts.BuildDirectory);
             clear dtm2020_mex;
             [rho, uncertainty, localTemperature, exosphericTemperature, species] = ...
@@ -43,6 +72,16 @@ classdef Dtm2020NativeTest < matlab.unittest.TestCase
         end
 
         function nativeOutputConvertsToSiContract(testCase)
+            % Description:
+            %   Checks conversion from native DTM2020 units/order to the project
+            %   SI atmosphere product contract.
+            %
+            % Arguments:
+            %   testCase - matlab.unittest.TestCase instance.
+            %
+            % Outputs:
+            %   None.
+
             nativeOutput = [1.0e-15; 25.0; 900.0; 1000.0; ...
                 1.0e-18; 2.0e-18; 3.0e-16; 4.0e-16; 2.0e-16; 1.0e-18];
             config = struct( ...

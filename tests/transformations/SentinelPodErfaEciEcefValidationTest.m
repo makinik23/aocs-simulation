@@ -8,20 +8,37 @@ classdef SentinelPodErfaEciEcefValidationTest < matlab.unittest.TestCase
 
     methods (TestClassSetup)
         function addProjectPaths(testCase)
-            testCase.ProjectRoot = fileparts(fileparts(fileparts(mfilename("fullpath"))));
+            % Description:
+            %   Locates the project root, Sentinel ERFA fixture, and transform harness.
+            %
+            % Arguments:
+            %   testCase - matlab.unittest.TestCase instance.
+            %
+            % Outputs:
+            %   None.
+
+            testCase.ProjectRoot = projectRoot();
             testCase.ReferenceFile = fullfile(testCase.ProjectRoot, ...
                 "validation", "sentinel_pod", "data", "sentinel_erfa_reference.mat");
             testCase.HarnessFile = fullfile(testCase.ProjectRoot, ...
                 "tests", "harnesses", "SentinelEciEcefTransformHarness.slx");
 
-            addpath(testCase.ProjectRoot);
-            addpath(fullfile(testCase.ProjectRoot, "src", "analysis"));
-            addpath(fullfile(testCase.ProjectRoot, "tests", "harnesses"));
+            setupAocsPaths(testCase.ProjectRoot, true);
         end
     end
 
     methods (Test)
         function simulinkHarnessReconstructsSentinelEcefFromErfaReference(testCase)
+            % Description:
+            %   Runs the ECI/ECEF transform harness against a Sentinel POD/ERFA
+            %   reference and checks reconstructed ECEF position error bounds.
+            %
+            % Arguments:
+            %   testCase - matlab.unittest.TestCase instance.
+            %
+            % Outputs:
+            %   None.
+
             testCase.assertTrue(isfile(testCase.HarnessFile), ...
                 "Sentinel ECI/ECEF transform harness is missing.");
             testCase.assertTrue(isfile(testCase.ReferenceFile), ...
@@ -34,7 +51,7 @@ classdef SentinelPodErfaEciEcefValidationTest < matlab.unittest.TestCase
 
             harnessName = "SentinelEciEcefTransformHarness";
             load_system(testCase.HarnessFile);
-            cleanup = onCleanup(@() closeSentinelErfaHarness(harnessName));
+            cleanup = onCleanup(@() closeLoadedSystem(harnessName));
             configureSentinelErfaHarnessEpoch(harnessName, ref.window_start_utc);
 
             inputDataset = sentinelErfaHarnessInputDataset(ref);
@@ -66,22 +83,36 @@ classdef SentinelPodErfaEciEcefValidationTest < matlab.unittest.TestCase
 end
 
 function inputDataset = sentinelErfaHarnessInputDataset(ref)
+% Description:
+%   Builds the external-input Dataset for the Sentinel ECI/ECEF transform harness.
+%
+% Arguments:
+%   ref - Struct loaded from the Sentinel POD/ERFA reference MAT-file.
+%
+% Outputs:
+%   inputDataset - Simulink external-input Dataset for the transform harness.
+
 time_s = ref.time_s(:);
 inputDataset = Simulink.SimulationData.Dataset();
-inputDataset = inputDataset.addElement(sentinelErfaTimeseries("r_I_m", ref.r_I_erfa_m, time_s));
-inputDataset = inputDataset.addElement(sentinelErfaTimeseries("delta_ut1_s", ref.delta_ut1_s(:), time_s));
-inputDataset = inputDataset.addElement(sentinelErfaTimeseries("delta_at_s", ref.delta_at_s(:), time_s));
-inputDataset = inputDataset.addElement(sentinelErfaTimeseries("polar_motion_rad", ref.polar_motion_rad, time_s));
-inputDataset = inputDataset.addElement(sentinelErfaTimeseries("d_cip_rad", ref.d_cip_rad, time_s));
-inputDataset = inputDataset.addElement(sentinelErfaTimeseries("t_s", time_s, time_s));
-end
-
-function ts = sentinelErfaTimeseries(name, values, time_s)
-ts = timeseries(values, time_s(:));
-ts.Name = char(name);
+inputDataset = inputDataset.addElement(namedTimeseries("r_I_m", ref.r_I_erfa_m, time_s));
+inputDataset = inputDataset.addElement(namedTimeseries("delta_ut1_s", ref.delta_ut1_s(:), time_s));
+inputDataset = inputDataset.addElement(namedTimeseries("delta_at_s", ref.delta_at_s(:), time_s));
+inputDataset = inputDataset.addElement(namedTimeseries("polar_motion_rad", ref.polar_motion_rad, time_s));
+inputDataset = inputDataset.addElement(namedTimeseries("d_cip_rad", ref.d_cip_rad, time_s));
+inputDataset = inputDataset.addElement(namedTimeseries("t_s", time_s, time_s));
 end
 
 function configureSentinelErfaHarnessEpoch(harnessName, epochUtcIso)
+% Description:
+%   Applies the Sentinel reference epoch to the harness ECI/ECEF transform block.
+%
+% Arguments:
+%   harnessName - Name of the loaded Sentinel transform harness.
+%   epochUtcIso - UTC epoch string in ISO-8601 Zulu format.
+%
+% Outputs:
+%   None.
+
 epoch = datetime(string(epochUtcIso), "InputFormat", "yyyy-MM-dd'T'HH:mm:ss'Z'", "TimeZone", "UTC");
 epochVec = datevec(epoch);
 block = harnessName + "/Direction Cosine Matrix ECI to ECEF";
@@ -99,12 +130,32 @@ set_param(block, ...
 end
 
 function monthName = sentinelErfaMonthNumberToName(monthNumber)
+% Description:
+%   Converts a numeric month to the Aerospace Blockset mask month name.
+%
+% Arguments:
+%   monthNumber - Integer month number in the range 1..12.
+%
+% Outputs:
+%   monthName - Character vector month name.
+
 monthNames = ["January", "February", "March", "April", "May", "June", ...
     "July", "August", "September", "October", "November", "December"];
 monthName = char(monthNames(monthNumber));
 end
 
 function [time_s, values] = sentinelErfaHarnessOutputVector(simOut, signalName)
+% Description:
+%   Extracts one named vector output from the Sentinel transform harness result.
+%
+% Arguments:
+%   simOut - Simulink.SimulationOutput returned by the harness run.
+%   signalName - Expected output signal name.
+%
+% Outputs:
+%   time_s - Output sample times [s].
+%   values - N-by-3 output vector samples.
+
 yout = simOut.get("yout");
 for k = 1:yout.numElements
     element = yout{k};
@@ -120,6 +171,16 @@ error("AOCS:Tests:MissingHarnessOutput", ...
 end
 
 function tf = sentinelErfaSignalElementMatches(element, signalName)
+% Description:
+%   Checks whether a Dataset element corresponds to a requested harness signal.
+%
+% Arguments:
+%   element - Simulink Dataset element.
+%   signalName - Expected signal name.
+%
+% Outputs:
+%   tf - True when the element name or block path matches signalName.
+
 tf = false;
 if isprop(element, "Name") && string(element.Name) == string(signalName)
     tf = true;
@@ -130,11 +191,5 @@ try
     blockPath = string(element.BlockPath.getBlock(1));
     tf = endsWith(blockPath, "/" + string(signalName));
 catch
-end
-end
-
-function closeSentinelErfaHarness(harnessName)
-if bdIsLoaded(harnessName)
-    close_system(harnessName, 0);
 end
 end

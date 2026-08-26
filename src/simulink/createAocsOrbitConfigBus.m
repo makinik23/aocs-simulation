@@ -25,6 +25,8 @@ elems(7) = busElement("inclination_rad", [1 1], "rad", "Initial Keplerian inclin
 elems(8) = busElement("raan_rad", [1 1], "rad", "Initial Keplerian right ascension of ascending node");
 elems(9) = busElement("argument_of_periapsis_rad", [1 1], "rad", "Initial Keplerian argument of periapsis");
 elems(10) = busElement("true_anomaly_rad", [1 1], "rad", "Initial Keplerian true anomaly");
+elems(11) = busElement("r_I_m", [3 1], "m", "Initial inertial Cartesian position");
+elems(12) = busElement("v_I_m_s", [3 1], "m/s", "Initial inertial Cartesian velocity");
 
 AOCS_OrbitConfigBus = Simulink.Bus;
 AOCS_OrbitConfigBus.Description = "Orbit configuration bus generated from config/AocsSimulationConfig.json";

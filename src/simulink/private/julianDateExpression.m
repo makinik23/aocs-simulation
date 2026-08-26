@@ -1,0 +1,19 @@
+function value = julianDateExpression(epochUtc)
+% Description:
+%   Formats a UTC vector as a Simulink mask expression evaluated to Julian
+%   date by Aerospace Blockset blocks.
+%
+% Arguments:
+%   epochUtc - 6-by-1 UTC vector [year month day hour minute second]'.
+%
+% Outputs:
+%   value - Character vector expression, e.g. juliandate(2026, 1, 1, 0, 0, 0).
+
+value = sprintf("juliandate(%s, %s, %s, %s, %s, %s)", ...
+    integerString(epochUtc(1)), ...
+    integerString(epochUtc(2)), ...
+    integerString(epochUtc(3)), ...
+    integerString(epochUtc(4)), ...
+    integerString(epochUtc(5)), ...
+    numericString(epochUtc(6)));
+end

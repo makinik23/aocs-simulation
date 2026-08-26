@@ -8,9 +8,8 @@ if nargin < 1
     modelFile = fullfile(projectRoot, "models", "aocs_plant.slx");
 end
 
-addpath(fullfile(projectRoot, "src", "config"));
-addpath(fullfile(projectRoot, "src", "environment"));
-addpath(fullfile(projectRoot, "src", "simulink"));
+addpath(projectRoot);
+setupAocsPaths(projectRoot);
 AOCS = setupAocsSimulation(fullfile(projectRoot, "config", "AocsSimulationConfig.json"));
 
 [~, modelName] = fileparts(modelFile);
@@ -47,7 +46,7 @@ atmosphereSelector = parent + "/Select Aerodynamic Atmosphere";
 configSelector = parent + "/Select Aerodynamic Config";
 speciesMux = parent + "/Species Number Densities";
 panelForcesTerminator = parent + "/Terminate Panel Forces";
-accelerationOut = parent + "/AerodynamicAcceleration";
+accelerationOut = parent + "/OrbitAcceleration";
 
 deleteBlockIfExists(chart);
 deleteBlockIfExists(atmosphereSelector);
@@ -95,7 +94,7 @@ for index = 1:7
 end
 
 add_line(parent, "Sentman Multispecies Panels/5", "Terminate Panel Forces/1", "autorouting", "on");
-add_line(parent, "Sentman Multispecies Panels/4", "AerodynamicAcceleration/1", "autorouting", "on");
+add_line(parent, "Sentman Multispecies Panels/4", "OrbitAcceleration/1", "autorouting", "on");
 
 torqueSum = parent + "/Add1";
 set_param(torqueSum, "Inputs", "+++");
@@ -121,14 +120,17 @@ orbitState = orbitAndTime + "/Orbit State";
 propagatorSubsystem = orbitState + "/Orbit Propagator";
 
 deleteBlockIfExists(orbitAndTime + "/AerodynamicAcceleration");
+deleteBlockIfExists(orbitAndTime + "/OrbitAcceleration");
 deleteBlockIfExists(orbitState + "/AerodynamicAcceleration");
+deleteBlockIfExists(orbitState + "/OrbitAcceleration");
 deleteBlockIfExists(propagatorSubsystem + "/AerodynamicAcceleration");
+deleteBlockIfExists(propagatorSubsystem + "/OrbitAcceleration");
 
-add_block("simulink/Ports & Subsystems/In1", orbitAndTime + "/AerodynamicAcceleration", ...
+add_block("simulink/Ports & Subsystems/In1", orbitAndTime + "/OrbitAcceleration", ...
     "Port", "2", "Position", [30 120 60 134]);
-add_block("simulink/Ports & Subsystems/In1", orbitState + "/AerodynamicAcceleration", ...
+add_block("simulink/Ports & Subsystems/In1", orbitState + "/OrbitAcceleration", ...
     "Port", "1", "Position", [25 90 55 104]);
-add_block("simulink/Ports & Subsystems/In1", propagatorSubsystem + "/AerodynamicAcceleration", ...
+add_block("simulink/Ports & Subsystems/In1", propagatorSubsystem + "/OrbitAcceleration", ...
     "Port", "1", "Position", [25 130 55 144]);
 
 propagatorBlocks = find_system(propagatorSubsystem, ...
@@ -143,10 +145,10 @@ set_param(propagatorHandle, ...
     "accelIn", "on", ...
     "accelFrame", "ICRF");
 
-add_line(propagatorSubsystem, "AerodynamicAcceleration/1", ...
+add_line(propagatorSubsystem, "OrbitAcceleration/1", ...
     string(get_param(propagatorHandle, "Name")) + "/1", "autorouting", "on");
-add_line(orbitState, "AerodynamicAcceleration/1", "Orbit Propagator/1", "autorouting", "on");
-add_line(orbitAndTime, "AerodynamicAcceleration/1", "Orbit State/1", "autorouting", "on");
+add_line(orbitState, "OrbitAcceleration/1", "Orbit Propagator/1", "autorouting", "on");
+add_line(orbitAndTime, "OrbitAcceleration/1", "Orbit State/1", "autorouting", "on");
 add_line(orbitAndEnvironment, "Disturbance Torques/2", ...
     "Orbit Propagator & Time/2", "autorouting", "on");
 end

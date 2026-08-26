@@ -8,9 +8,8 @@ if nargin < 1
     modelFile = fullfile(projectRoot, "models", "aocs_plant.slx");
 end
 
-addpath(fullfile(projectRoot, "src", "config"));
-addpath(fullfile(projectRoot, "src", "environment"));
-addpath(fullfile(projectRoot, "src", "simulink"));
+addpath(projectRoot);
+setupAocsPaths(projectRoot);
 setupAocsSimulation(fullfile(projectRoot, "config", "AocsSimulationConfig.json"));
 
 [~, modelName] = fileparts(modelFile);

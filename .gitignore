@@ -28,3 +28,20 @@ test-results/
 
 esa_swarm/
 /third_party/dtm2020/upstream/
+
+# Local external-validation data
+/validation/planet/data/*
+!/validation/planet/data/.gitkeep
+
+# Local Basilisk/Vizard experiments
+.venv-basilisk/
+bskLargeData/
+_VizFiles/
+**/_VizFiles/
+results/basilisk/
+**/*_basilisk_state.csv
+**/*_basilisk_state.json
+**/*_vizard.bin
+export_basilisk_visualization.m
+src/analysis/exportBasiliskDataFile.m
+tools/create_vizard_message_file.py

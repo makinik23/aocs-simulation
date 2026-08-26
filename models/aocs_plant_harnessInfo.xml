@@ -73,7 +73,7 @@
     <P Name="CustomSourcePath"/>
     <P Name="CustomSinkPath"/>
     <P Name="BlockSIDs">19|66|0|0|0|0|0</P>
-    <P Name="OpenGraphs">||Dtm2020AtmosphereHarness</P>
+    <P Name="OpenGraphs">||||Dtm2020AtmosphereHarness</P>
     <P Name="ExistingBuildFolder"/>
     <P Name="FunctionInterfaceName"/>
     <P Name="SysArchSUTModel"/>
@@ -84,14 +84,14 @@
     <P Name="CreatedBy">juliankazmierski</P>
     <P Name="CreatedOn">Mon Aug 17 22:47:31 2026</P>
     <P Name="ModifiedBy">juliankazmierski</P>
-    <P Name="LastSaved">Mon Aug 17 22:47:47 2026</P>
-    <P Name="Owner">623</P>
+    <P Name="LastSaved">Thu Aug 20 11:02:03 2026</P>
+    <P Name="Owner">688</P>
     <P Name="OwnerType">SS_HARNESS</P>
-    <P Name="OwnerPath">Orbit &amp; Environment/Disturbance Torques/Sentman Multispecies Panels</P>
+    <P Name="OwnerPath">Orbit &amp; Environment/Disturbance Torques/Aerodynamic Disturbance Path/Sentman Multispecies Panels</P>
     <P Name="Directory"/>
     <P Name="FileName">AerodynamicsSinglePlateHarness.slx</P>
     <P Name="SavedVersion">25.1</P>
-    <P Name="HarnessUUID">d45893f1-d46a-4459-a8af-b90b8886607f</P>
+    <P Name="HarnessUUID">24f37da2-685c-4884-9c1f-cc8d49890409</P>
     <P Name="HarnessConnectionsMap">0,1,2,3,4,5,6,7,8,9,10,11|0,1,2,3,4,5|0,0,0,0||</P>
     <P Name="VerificationMode">0</P>
     <P Name="HarnessOwnerCheckSum">0,0,0,0</P>

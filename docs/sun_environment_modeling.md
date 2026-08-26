@@ -1,7 +1,7 @@
 # Sun, Eclipse, and SRP Modeling
 
 This document describes the model choices and equations used for Sun geometry,
-eclipse shadowing, solar flux, and SRP torque.
+eclipse shadowing, solar flux, and solar-radiation-pressure force/torque.
 
 General frame conventions and signal suffix rules are defined in
 [transformations.md](transformations.md). The current Sun-specific model
@@ -20,6 +20,11 @@ solar_flux_W_m2           raw solar irradiance at spacecraft distance [W/m^2]
 sun_visibility            direct solar illumination fraction in [0, 1]
 solar_flux_shadowed_W_m2  eclipse-shadowed solar irradiance [W/m^2]
 M_srp_B_Nm                SRP torque expressed in body axes [N*m]
+F_srp_B_N                 SRP force expressed in body axes [N]
+F_srp_I_N                 SRP force expressed in inertial axes [N]
+P_srp_N_m2                eclipse-shadowed solar radiation pressure [N/m^2]
+a_srp_I_m_s2              SRP acceleration expressed in inertial axes [m/s^2]
+a_dist_I_m_s2             total translational disturbance acceleration [m/s^2]
 M_dist_B_Nm               total modeled environment disturbance torque [N*m]
 ```
 
@@ -147,12 +152,13 @@ The irradiance available to models that need direct sunlight is:
 solar_flux_shadowed_W_m2 = sun_visibility * solar_flux_W_m2
 ```
 
-## SRP Torque
+## SRP Force, Torque, and Orbit Acceleration
 
 The current SRP model is implemented in:
 
 ```text
 src/environment/computeSrpTorque.m
+src/environment/computeSrpAcceleration.m
 ```
 
 It is a constant-area lumped-coefficient model:
@@ -162,11 +168,18 @@ P_srp_N_m2  = solar_flux_shadowed_W_m2 / c_m_s
 F_srp_mag_N = P_srp_N_m2 * coefficient_reflectivity * area_ref_m2
 F_srp_B_N   = -F_srp_mag_N * sun_B_unit
 M_srp_B_Nm  = cross(center_of_pressure_B_m, F_srp_B_N)
+F_srp_I_N   = C_BI' * F_srp_B_N
+a_srp_I     = F_srp_I_N / spacecraft_mass
+a_dist_I    = a_aero_I + a_srp_I
 ```
 
 The negative sign appears because `sun_B_unit` points from the spacecraft to the
 Sun, while radiation pressure acts away from the Sun.
 
+`a_dist_I_m_s2` is connected to the `A_icrf` input of Aerospace Blockset's
+Numerical (high precision) Orbit Propagator. The built-in propagator SRP option
+is kept disabled so the orbit path uses the same project-level SRP model as the
+attitude disturbance-torque path.
 
 ## Current Limits
 
