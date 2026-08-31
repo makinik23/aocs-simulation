@@ -1,4 +1,4 @@
-function AOCS_EnvironmentBus = createAocsEnvironmentBus(targetWorkspace)
+function EnvironmentBus = createEnvironmentBus(targetWorkspace)
 % Description:
 %   Defines runtime environment products consumed by disturbance and sensor
 %   models.
@@ -8,7 +8,7 @@ function AOCS_EnvironmentBus = createAocsEnvironmentBus(targetWorkspace)
 %                     bus object to the MATLAB base workspace.
 %
 % Outputs:
-%   AOCS_EnvironmentBus - Simulink.Bus object for environment products.
+%   EnvironmentBus - Simulink.Bus object for environment products.
 
 if nargin < 1
     targetWorkspace = "base";
@@ -27,7 +27,7 @@ elems(9) = busElement("solar_flux_shadowed_W_m2", 1, "W/m^2", "Solar irradiance,
 elems(10) = busElement("sun_visibility", 1, "1", "Fraction of direct solar illumination in [0, 1]");
 elems(11) = busElement("Atmosphere", 1, "", ...
     "Neutral atmosphere products used by aerodynamic models");
-elems(11).DataType = "Bus: AOCS_AtmosphereBus";
+elems(11).DataType = "Bus: AtmosphereBus";
 elems(12) = busElement("M_srp_B_Nm", [3 1], "N*m", ...
     "Solar radiation pressure torque expressed in body axes");
 elems(13) = busElement("F_srp_B_N", [3 1], "N", ...
@@ -51,12 +51,12 @@ elems(21) = busElement("q_dyn_N_m2", 1, "N/m^2", ...
 elems(22) = busElement("v_rel_norm_m_s", 1, "m/s", ...
     "Spacecraft-atmosphere relative speed");
 
-AOCS_EnvironmentBus = Simulink.Bus;
-AOCS_EnvironmentBus.Description = "Runtime environment products bus";
-AOCS_EnvironmentBus.Elements = elems;
+EnvironmentBus = Simulink.Bus;
+EnvironmentBus.Description = "Runtime environment products bus";
+EnvironmentBus.Elements = elems;
 
 if targetWorkspace == "base"
-    assignin("base", "AOCS_EnvironmentBus", AOCS_EnvironmentBus);
+    assignin("base", "EnvironmentBus", EnvironmentBus);
 end
 end
 

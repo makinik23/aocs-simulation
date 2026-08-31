@@ -1,4 +1,4 @@
-function AOCS_ConfigBus = createAocsConfigBus(targetWorkspace)
+function ConfigBus = createConfigBus(targetWorkspace)
 % Description:
 %   Defines the public plant input contract: inertia, initial Euler attitude,
 %   initial body rates, and external torque.
@@ -8,7 +8,7 @@ function AOCS_ConfigBus = createAocsConfigBus(targetWorkspace)
 %                     bus object to the MATLAB base workspace.
 %
 % Outputs:
-%   AOCS_ConfigBus - Simulink.Bus object for plant configuration.
+%   ConfigBus - Simulink.Bus object for plant configuration.
 
 if nargin < 1
     targetWorkspace = "base";
@@ -32,12 +32,12 @@ elems(10) = busElement("aero_wall_temperature_K", [6 1], "K", ...
 elems(11) = busElement("aero_energy_accommodation", [6 1], "1", ...
     "Sentman-Schamberg energy accommodation coefficients for each panel");
 
-AOCS_ConfigBus = Simulink.Bus;
-AOCS_ConfigBus.Description = "AOCS plant configuration bus generated from config/AocsSimulationConfig.json";
-AOCS_ConfigBus.Elements = elems;
+ConfigBus = Simulink.Bus;
+ConfigBus.Description = "AOCS plant configuration bus generated from config/AocsSimulationConfig.json";
+ConfigBus.Elements = elems;
 
 if targetWorkspace == "base"
-    assignin("base", "AOCS_ConfigBus", AOCS_ConfigBus);
+    assignin("base", "ConfigBus", ConfigBus);
 end
 end
 

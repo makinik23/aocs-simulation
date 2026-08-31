@@ -11,7 +11,7 @@ function AOCS = loadAocsSimulationConfig(configFile, projectRoot)
 %
 % Outputs:
 %   AOCS - Validated configuration struct. AOCS.Config contains only the
-%          numeric plant inputs exposed through AOCS_ConfigBus.
+%          numeric plant inputs exposed through ConfigBus.
 
 if nargin < 2 || strlength(string(projectRoot)) == 0
     projectRoot = fileparts(fileparts(fileparts(mfilename("fullpath"))));
@@ -45,6 +45,7 @@ spacecraft = requireStruct(raw, "spacecraft", "spacecraft");
 spacecraftGeometry = requireStruct(spacecraft, "geometry", "spacecraft.geometry");
 aerodynamics = requireStruct(spacecraft, "aerodynamics", "spacecraft.aerodynamics");
 massProps = requireStruct(spacecraft, "mass_properties", "spacecraft.mass_properties");
+sensors = requireStruct(raw, "sensors", "sensors");
 initial = requireStruct(raw, "initial_conditions", "initial_conditions");
 environment = requireStruct(raw, "environment", "environment");
 disturbances = requireStruct(environment, "disturbances", "environment.disturbances");
@@ -122,6 +123,7 @@ aerodynamicsConfig.Enabled = disturbancesEnabled && atmosphereConfig.Enabled && 
 srpConfig = readSrpConfig(srp);
 srpConfig.Enabled = disturbancesEnabled && srpConfig.Enabled;
 eclipseConfig = readEclipseConfig(eclipse);
+sensorsConfig = readSensorsConfig(sensors);
 
 if ~disturbancesEnabled
     M_ext_B = zeros(3, 1);
@@ -174,6 +176,7 @@ AOCS.Spacecraft.Dimensions_m = dimensions_m;
 AOCS.Spacecraft.Mass_kg = mass_kg;
 AOCS.Spacecraft.I_B = I_B;
 AOCS.Spacecraft.Aerodynamics = aerodynamicsConfig;
+AOCS.Sensors = sensorsConfig;
 
 AOCS.Initial.q_BI = q_BI;
 AOCS.Initial.euler_BI_0_rad = euler_BI_0_rad;
@@ -202,6 +205,7 @@ AOCS.Convention.omega_BI_B = string(requireField(conventions, "omega_BI_B", "con
 AOCS.Config = buildBusConfig(AOCS);
 AOCS.OrbitConfig = buildOrbitBusConfig(AOCS);
 AOCS.EnvironmentConfig = buildEnvironmentBusConfig(AOCS);
+AOCS.SensorConfig = buildSensorBusConfig(AOCS);
 AOCS.Raw = raw;
 end
 
@@ -213,7 +217,7 @@ function config = buildBusConfig(AOCS)
 %   AOCS - Validated AOCS configuration struct.
 %
 % Outputs:
-%   config - Struct matching createAocsConfigBus element names and dimensions.
+%   config - Struct matching createConfigBus element names and dimensions.
 
 config = struct();
 config.I_B = AOCS.Spacecraft.I_B;
@@ -239,7 +243,7 @@ function config = buildOrbitBusConfig(AOCS)
 %   AOCS - Validated AOCS configuration struct.
 %
 % Outputs:
-%   config - Struct matching createAocsOrbitConfigBus element names.
+%   config - Struct matching createOrbitConfigBus element names.
 
 keplerian = AOCS.Orbit.InitialKeplerian;
 cartesian = AOCS.Orbit.InitialCartesian;
@@ -388,7 +392,7 @@ function config = buildEnvironmentBusConfig(AOCS)
 %   AOCS - Validated AOCS configuration struct.
 %
 % Outputs:
-%   config - Struct matching createAocsEnvironmentConfigBus element names.
+%   config - Struct matching createEnvironmentConfigBus element names.
 
 config = struct();
 config.rmm_enabled = double(AOCS.Environment.RmmEnabled);
@@ -413,6 +417,97 @@ config.kp = AOCS.Environment.Atmosphere.NominalSpaceWeather.Kp;
 config.f30_sfu = AOCS.Environment.Atmosphere.NominalSpaceWeather.F30_sfu;
 config.f30_81d_sfu = AOCS.Environment.Atmosphere.NominalSpaceWeather.F30_81d_sfu;
 config.hp60 = AOCS.Environment.Atmosphere.NominalSpaceWeather.Hp60;
+end
+
+function config = readSensorsConfig(sensors)
+% Description:
+%   Validates sensor-model configuration sections.
+%
+% Arguments:
+%   sensors - JSON object from sensors.
+%
+% Outputs:
+%   config - Struct containing normalized sensor model settings.
+
+config = struct();
+config.Gyro = readGyroConfig(requireStruct(sensors, "gyro", "sensors.gyro"));
+end
+
+function config = readGyroConfig(gyro)
+% Description:
+%   Validates gyroscope operating mode, sampling, stochastic, calibration, and
+%   failure-test settings.
+%
+% Arguments:
+%   gyro - JSON object from sensors.gyro.
+%
+% Outputs:
+%   config - Struct containing normalized gyroscope settings.
+
+failure = requireStruct(gyro, "failure", "sensors.gyro.failure");
+
+config = struct();
+config.Enabled = logicalScalarField(gyro, "enabled", "sensors.gyro.enabled");
+config.Mode = enumStringField(gyro, "mode", "sensors.gyro.mode", ...
+    ["nominal", "failure"]);
+config.SampleTime_s = scalarField(gyro, "gyro_sample_time_s", ...
+    "sensors.gyro.gyro_sample_time_s", true);
+config.NoiseDensity_rad_s_sqrt_Hz = nonnegativeScalarField(gyro, ...
+    "noise_density_rad_s_sqrt_Hz", ...
+    "sensors.gyro.noise_density_rad_s_sqrt_Hz");
+config.BiasInitial_rad_s = columnField(gyro, "bias_initial_rad_s", ...
+    "sensors.gyro.bias_initial_rad_s", 3);
+config.BiasRandomWalkStd_rad_s_sqrt_s = nonnegativeScalarField(gyro, ...
+    "bias_random_walk_std_rad_s_sqrt_s", ...
+    "sensors.gyro.bias_random_walk_std_rad_s_sqrt_s");
+config.ScaleFactor = columnField(gyro, "scale_factor", ...
+    "sensors.gyro.scale_factor", 3);
+config.MisalignmentMatrix = matrixField(gyro, "misalignment_matrix", ...
+    "sensors.gyro.misalignment_matrix", 3, 3);
+config.Range_rad_s = scalarField(gyro, "range_rad_s", ...
+    "sensors.gyro.range_rad_s", true);
+config.Resolution_rad_s = scalarField(gyro, "resolution_rad_s", ...
+    "sensors.gyro.resolution_rad_s", true);
+config.NoiseSeed = integerScalarField(gyro, "noise_seed", ...
+    "sensors.gyro.noise_seed", 0, 2147483647);
+config.BiasSeed = integerScalarField(gyro, "bias_seed", ...
+    "sensors.gyro.bias_seed", 0, 2147483647);
+config.Failure.Output_rad_s = columnField(failure, "output_rad_s", ...
+    "sensors.gyro.failure.output_rad_s", 3);
+config.Failure.Valid = logicalScalarField(failure, "valid", ...
+    "sensors.gyro.failure.valid");
+end
+
+function config = buildSensorBusConfig(AOCS)
+% Description:
+%   Selects numeric sensor values intended for Simulink sensor subsystems.
+%
+% Arguments:
+%   AOCS - Validated AOCS configuration struct.
+%
+% Outputs:
+%   config - Struct matching createSensorConfigBus element names.
+
+gyro = AOCS.Sensors.Gyro;
+
+config = struct();
+config.Gyro.enabled = double(gyro.Enabled);
+config.Gyro.mode_id = gyroModeId(gyro.Mode);
+config.Gyro.gyro_sample_time_s = gyro.SampleTime_s;
+config.Gyro.noise_density_rad_s_sqrt_Hz = gyro.NoiseDensity_rad_s_sqrt_Hz;
+config.Gyro.noise_std_rad_s = gyro.NoiseDensity_rad_s_sqrt_Hz / sqrt(gyro.SampleTime_s);
+config.Gyro.bias_initial_rad_s = gyro.BiasInitial_rad_s;
+config.Gyro.bias_random_walk_std_rad_s_sqrt_s = gyro.BiasRandomWalkStd_rad_s_sqrt_s;
+config.Gyro.bias_random_walk_step_std_rad_s = ...
+    gyro.BiasRandomWalkStd_rad_s_sqrt_s * sqrt(gyro.SampleTime_s);
+config.Gyro.scale_factor = gyro.ScaleFactor;
+config.Gyro.misalignment_matrix = gyro.MisalignmentMatrix;
+config.Gyro.range_rad_s = gyro.Range_rad_s;
+config.Gyro.resolution_rad_s = gyro.Resolution_rad_s;
+config.Gyro.noise_seed = gyro.NoiseSeed;
+config.Gyro.bias_seed = gyro.BiasSeed;
+config.Gyro.failure_output_rad_s = gyro.Failure.Output_rad_s;
+config.Gyro.failure_valid = double(gyro.Failure.Valid);
 end
 
 function config = readSunConfig(sun)
@@ -448,6 +543,30 @@ if utcSerialDay(config.EphemerisEndUtc) <= utcSerialDay(config.EphemerisStartUtc
     error("AOCS:Config:InvalidSunEphemerisRange", ...
         "environment.sun.ephemeris_end_utc must be later than environment.sun.ephemeris_start_utc.");
 end
+end
+
+function value = nonnegativeScalarField(parent, fieldName, displayName)
+% Description:
+%   Reads a finite scalar JSON number constrained to be non-negative.
+
+value = scalarField(parent, fieldName, displayName, false);
+if value < 0.0
+    error("AOCS:Config:InvalidField", ...
+        "Config field %s must be non-negative.", displayName);
+end
+end
+
+function value = integerScalarField(parent, fieldName, displayName, minimumValue, maximumValue)
+% Description:
+%   Reads a finite scalar JSON number constrained to an integer range.
+
+value = scalarField(parent, fieldName, displayName, false);
+if value < minimumValue || value > maximumValue || value ~= round(value)
+    error("AOCS:Config:InvalidField", ...
+        "Config field %s must be an integer in [%g, %g].", ...
+        displayName, minimumValue, maximumValue);
+end
+value = double(round(value));
 end
 
 

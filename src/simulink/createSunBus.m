@@ -1,4 +1,4 @@
-function AOCS_SunBus = createAocsSunBus(targetWorkspace)
+function SunBus = createSunBus(targetWorkspace)
 % Description:
 %   Defines Sun geometry and unshadowed solar flux products.
 
@@ -13,12 +13,12 @@ elems(3) = busElement("r_sun_I_m", [3 1], "m", "Approximate Earth-to-Sun positio
 elems(4) = busElement("sun_distance_m", [1 1], "m", "Approximate spacecraft-to-Sun distance");
 elems(5) = busElement("solar_flux_W_m2", [1 1], "W/m^2", "Solar irradiance scaled by spacecraft-to-Sun distance");
 
-AOCS_SunBus = Simulink.Bus;
-AOCS_SunBus.Description = "Sun geometry and unshadowed flux product bus";
-AOCS_SunBus.Elements = elems;
+SunBus = Simulink.Bus;
+SunBus.Description = "Sun geometry and unshadowed flux product bus";
+SunBus.Elements = elems;
 
 if targetWorkspace == "base"
-    assignin("base", "AOCS_SunBus", AOCS_SunBus);
+    assignin("base", "SunBus", SunBus);
 end
 end
 

@@ -1,4 +1,4 @@
-function AOCS_OrbitStateBus = createAocsOrbitStateBus(targetWorkspace)
+function OrbitStateBus = createOrbitStateBus(targetWorkspace)
 % Description:
 %   Defines the runtime orbit state produced by the orbit propagator.
 %
@@ -7,7 +7,7 @@ function AOCS_OrbitStateBus = createAocsOrbitStateBus(targetWorkspace)
 %                     bus object to the MATLAB base workspace.
 %
 % Outputs:
-%   AOCS_OrbitStateBus - Simulink.Bus object for orbit state signals.
+%   OrbitStateBus - Simulink.Bus object for orbit state signals.
 
 if nargin < 1
     targetWorkspace = "base";
@@ -17,12 +17,12 @@ targetWorkspace = string(targetWorkspace);
 elems(1) = busElement("r_I_m", [3 1], "m", "Spacecraft inertial position vector");
 elems(2) = busElement("v_I_m_s", [3 1], "m/s", "Spacecraft inertial velocity vector");
 
-AOCS_OrbitStateBus = Simulink.Bus;
-AOCS_OrbitStateBus.Description = "Orbit propagator state output bus";
-AOCS_OrbitStateBus.Elements = elems;
+OrbitStateBus = Simulink.Bus;
+OrbitStateBus.Description = "Orbit propagator state output bus";
+OrbitStateBus.Elements = elems;
 
 if targetWorkspace == "base"
-    assignin("base", "AOCS_OrbitStateBus", AOCS_OrbitStateBus);
+    assignin("base", "OrbitStateBus", OrbitStateBus);
 end
 end
 

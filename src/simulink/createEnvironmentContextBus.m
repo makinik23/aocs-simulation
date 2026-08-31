@@ -1,4 +1,4 @@
-function AOCS_EnvironmentContextBus = createAocsEnvironmentContextBus(targetWorkspace)
+function EnvironmentContextBus = createEnvironmentContextBus(targetWorkspace)
 % Description:
 %   Defines runtime timing and central-body context used by environment models.
 %
@@ -7,7 +7,7 @@ function AOCS_EnvironmentContextBus = createAocsEnvironmentContextBus(targetWork
 %                     bus object to the MATLAB base workspace.
 %
 % Outputs:
-%   AOCS_EnvironmentContextBus - Simulink.Bus object for environment context.
+%   EnvironmentContextBus - Simulink.Bus object for environment context.
 
 if nargin < 1
     targetWorkspace = "base";
@@ -24,12 +24,12 @@ elems(7) = busElement("delta_ut1_s", [1 1], "s", "UT1 minus UTC offset used by h
 elems(8) = busElement("polar_motion_rad", [1 2], "rad", "Earth polar motion [xp yp] used by high-accuracy ECI/ECEF transforms");
 elems(9) = busElement("d_cip_rad", [1 2], "rad", "IAU-2000/2006 celestial intermediate pole correction [dX dY]");
 
-AOCS_EnvironmentContextBus = Simulink.Bus;
-AOCS_EnvironmentContextBus.Description = "Runtime environment timing and central-body context bus";
-AOCS_EnvironmentContextBus.Elements = elems;
+EnvironmentContextBus = Simulink.Bus;
+EnvironmentContextBus.Description = "Runtime environment timing and central-body context bus";
+EnvironmentContextBus.Elements = elems;
 
 if targetWorkspace == "base"
-    assignin("base", "AOCS_EnvironmentContextBus", AOCS_EnvironmentContextBus);
+    assignin("base", "EnvironmentContextBus", EnvironmentContextBus);
 end
 end
 

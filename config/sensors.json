@@ -1,0 +1,50 @@
+{
+  "sensors": {
+    "gyro": {
+      "enabled": true,
+      "mode": "nominal",
+      "gyro_sample_time_s": 0.1,
+      "noise_density_rad_s_sqrt_Hz": 8.726646259971648e-5,
+      "bias_initial_rad_s": [
+        1.7453292519943296e-4,
+        -8.726646259971648e-5,
+        5.235987755982989e-5
+      ],
+      "bias_random_walk_std_rad_s_sqrt_s": 1.0e-6,
+      "scale_factor": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "misalignment_matrix": [
+        [
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "range_rad_s": 8.726646259971648,
+      "resolution_rad_s": 1.7453292519943296e-5,
+      "noise_seed": 23001,
+      "bias_seed": 23002,
+      "failure": {
+        "output_rad_s": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "valid": false
+      }
+    }
+  }
+}

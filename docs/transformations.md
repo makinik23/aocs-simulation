@@ -233,7 +233,7 @@ The principal files related to frames, time, and environment calculations are:
 config/AocsSimulationConfig.json
 src/config/loadAocsSimulationConfig.m
 src/simulink/applyAocsSimulationSettings.m
-src/simulink/createAocs*Bus.m
+src/simulink/create*Bus.m
 src/environment/sunPositionLowPrecision.m
 src/environment/computeSunProducts.m
 ```

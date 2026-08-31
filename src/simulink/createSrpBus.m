@@ -1,4 +1,4 @@
-function AOCS_SrpBus = createAocsSrpBus(targetWorkspace)
+function SrpBus = createSrpBus(targetWorkspace)
 % Description:
 %   Defines solar-radiation-pressure disturbance products.
 
@@ -11,12 +11,12 @@ elems(1) = busElement("M_srp_B_Nm", [3 1], "N*m", "Solar radiation pressure torq
 elems(2) = busElement("F_srp_B_N", [3 1], "N", "Solar radiation pressure force expressed in body axes");
 elems(3) = busElement("P_srp_N_m2", 1, "N/m^2", "Eclipse-shadowed solar radiation pressure");
 
-AOCS_SrpBus = Simulink.Bus;
-AOCS_SrpBus.Description = "Solar radiation pressure product bus";
-AOCS_SrpBus.Elements = elems;
+SrpBus = Simulink.Bus;
+SrpBus.Description = "Solar radiation pressure product bus";
+SrpBus.Elements = elems;
 
 if targetWorkspace == "base"
-    assignin("base", "AOCS_SrpBus", AOCS_SrpBus);
+    assignin("base", "SrpBus", SrpBus);
 end
 end
 

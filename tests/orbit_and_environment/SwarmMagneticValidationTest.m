@@ -271,7 +271,7 @@ AOCS = setupAocsSimulation(configFile);
 earthOrientation = AOCS.Environment.EarthOrientation;
 swarmR_I_m = swarmEciTrack(data, earthOrientation);
 harnessName = "SwarmGeomagneticHarness";
-owner = "aocs_plant/Orbit & Environment/Environment Products/Geomagnetic Field Model";
+owner = "aocs_plant/Flight Dynamics/Orbit & Environment/Environment Products/Geomagnetic Field Model";
 harnessFile = fullfile(projectRoot, "tests", "harnesses", harnessName + ".slx");
 
 if ~isfile(harnessFile)

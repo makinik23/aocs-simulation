@@ -1,4 +1,4 @@
-function AOCS_DisturbanceBus = createAocsDisturbanceBus(targetWorkspace)
+function DisturbanceBus = createDisturbanceBus(targetWorkspace)
 % Description:
 %   Defines modeled disturbance torque products.
 
@@ -20,12 +20,12 @@ elems(10) = busElement("a_dist_I_m_s2", [3 1], "m/s^2", "Total translational dis
 elems(11) = busElement("q_dyn_N_m2", 1, "N/m^2", "Dynamic pressure based on DTM2020 total density");
 elems(12) = busElement("v_rel_norm_m_s", 1, "m/s", "Spacecraft-atmosphere relative speed");
 
-AOCS_DisturbanceBus = Simulink.Bus;
-AOCS_DisturbanceBus.Description = "Disturbance torque product bus";
-AOCS_DisturbanceBus.Elements = elems;
+DisturbanceBus = Simulink.Bus;
+DisturbanceBus.Description = "Disturbance torque product bus";
+DisturbanceBus.Elements = elems;
 
 if targetWorkspace == "base"
-    assignin("base", "AOCS_DisturbanceBus", AOCS_DisturbanceBus);
+    assignin("base", "DisturbanceBus", DisturbanceBus);
 end
 end
 
