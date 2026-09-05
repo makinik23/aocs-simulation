@@ -431,6 +431,8 @@ function config = readSensorsConfig(sensors)
 
 config = struct();
 config.Gyro = readGyroConfig(requireStruct(sensors, "gyro", "sensors.gyro"));
+config.Magnetometer = readMagnetometerConfig(requireStruct(sensors, ...
+    "magnetometer", "sensors.magnetometer"));
 end
 
 function config = readGyroConfig(gyro)
@@ -478,6 +480,53 @@ config.Failure.Valid = logicalScalarField(failure, "valid", ...
     "sensors.gyro.failure.valid");
 end
 
+function config = readMagnetometerConfig(magnetometer)
+% Description:
+%   Validates magnetometer operating mode, sampling, stochastic, calibration,
+%   and failure-test settings.
+%
+% Arguments:
+%   magnetometer - JSON object from sensors.magnetometer.
+%
+% Outputs:
+%   config - Struct containing normalized magnetometer settings.
+
+failure = requireStruct(magnetometer, "failure", ...
+    "sensors.magnetometer.failure");
+
+config = struct();
+config.Enabled = logicalScalarField(magnetometer, "enabled", ...
+    "sensors.magnetometer.enabled");
+config.Mode = enumStringField(magnetometer, "mode", ...
+    "sensors.magnetometer.mode", ["nominal", "failure"]);
+config.SampleTime_s = scalarField(magnetometer, "sample_time_s", ...
+    "sensors.magnetometer.sample_time_s", true);
+config.NoiseDensity_T_sqrt_Hz = nonnegativeScalarField(magnetometer, ...
+    "noise_density_T_sqrt_Hz", ...
+    "sensors.magnetometer.noise_density_T_sqrt_Hz");
+config.BiasInitial_T = columnField(magnetometer, "bias_initial_T", ...
+    "sensors.magnetometer.bias_initial_T", 3);
+config.BiasRandomWalkStd_T_sqrt_s = nonnegativeScalarField(magnetometer, ...
+    "bias_random_walk_std_T_sqrt_s", ...
+    "sensors.magnetometer.bias_random_walk_std_T_sqrt_s");
+config.ScaleFactor = columnField(magnetometer, "scale_factor", ...
+    "sensors.magnetometer.scale_factor", 3);
+config.MisalignmentMatrix = matrixField(magnetometer, ...
+    "misalignment_matrix", "sensors.magnetometer.misalignment_matrix", 3, 3);
+config.Range_T = scalarField(magnetometer, "range_T", ...
+    "sensors.magnetometer.range_T", true);
+config.Resolution_T = scalarField(magnetometer, "resolution_T", ...
+    "sensors.magnetometer.resolution_T", true);
+config.NoiseSeed = integerScalarField(magnetometer, "noise_seed", ...
+    "sensors.magnetometer.noise_seed", 0, 2147483647);
+config.BiasSeed = integerScalarField(magnetometer, "bias_seed", ...
+    "sensors.magnetometer.bias_seed", 0, 2147483647);
+config.Failure.Output_T = columnField(failure, "output_T", ...
+    "sensors.magnetometer.failure.output_T", 3);
+config.Failure.Valid = logicalScalarField(failure, "valid", ...
+    "sensors.magnetometer.failure.valid");
+end
+
 function config = buildSensorBusConfig(AOCS)
 % Description:
 %   Selects numeric sensor values intended for Simulink sensor subsystems.
@@ -489,6 +538,7 @@ function config = buildSensorBusConfig(AOCS)
 %   config - Struct matching createSensorConfigBus element names.
 
 gyro = AOCS.Sensors.Gyro;
+magnetometer = AOCS.Sensors.Magnetometer;
 
 config = struct();
 config.Gyro.enabled = double(gyro.Enabled);
@@ -508,6 +558,27 @@ config.Gyro.noise_seed = gyro.NoiseSeed;
 config.Gyro.bias_seed = gyro.BiasSeed;
 config.Gyro.failure_output_rad_s = gyro.Failure.Output_rad_s;
 config.Gyro.failure_valid = double(gyro.Failure.Valid);
+
+config.Magnetometer.enabled = double(magnetometer.Enabled);
+config.Magnetometer.mode_id = magnetometerModeId(magnetometer.Mode);
+config.Magnetometer.sample_time_s = magnetometer.SampleTime_s;
+config.Magnetometer.noise_density_T_sqrt_Hz = ...
+    magnetometer.NoiseDensity_T_sqrt_Hz;
+config.Magnetometer.noise_std_T = magnetometer.NoiseDensity_T_sqrt_Hz / ...
+    sqrt(magnetometer.SampleTime_s);
+config.Magnetometer.bias_initial_T = magnetometer.BiasInitial_T;
+config.Magnetometer.bias_random_walk_std_T_sqrt_s = ...
+    magnetometer.BiasRandomWalkStd_T_sqrt_s;
+config.Magnetometer.bias_random_walk_step_std_T = ...
+    magnetometer.BiasRandomWalkStd_T_sqrt_s * sqrt(magnetometer.SampleTime_s);
+config.Magnetometer.scale_factor = magnetometer.ScaleFactor;
+config.Magnetometer.misalignment_matrix = magnetometer.MisalignmentMatrix;
+config.Magnetometer.range_T = magnetometer.Range_T;
+config.Magnetometer.resolution_T = magnetometer.Resolution_T;
+config.Magnetometer.noise_seed = magnetometer.NoiseSeed;
+config.Magnetometer.bias_seed = magnetometer.BiasSeed;
+config.Magnetometer.failure_output_T = magnetometer.Failure.Output_T;
+config.Magnetometer.failure_valid = double(magnetometer.Failure.Valid);
 end
 
 function config = readSunConfig(sun)

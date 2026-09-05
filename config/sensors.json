@@ -45,6 +45,52 @@
         ],
         "valid": false
       }
+    },
+    "magnetometer": {
+      "enabled": true,
+      "mode": "nominal",
+      "sample_time_s": 0.1,
+      "noise_density_T_sqrt_Hz": 1e-9,
+      "bias_initial_T": [
+        5e-8,
+        -3e-8,
+        2e-8
+      ],
+      "bias_random_walk_std_T_sqrt_s": 1e-11,
+      "scale_factor": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "misalignment_matrix": [
+        [
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "range_T": 1e-4,
+      "resolution_T": 1e-9,
+      "noise_seed": 24001,
+      "bias_seed": 24002,
+      "failure": {
+        "output_T": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "valid": false
+      }
     }
   }
 }

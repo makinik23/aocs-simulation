@@ -20,6 +20,12 @@ elems(1).Dimensions = 1;
 elems(1).DataType = "Bus: GyroConfigBus";
 elems(1).Description = "Gyroscope sensor configuration";
 
+elems(2) = Simulink.BusElement;
+elems(2).Name = "Magnetometer";
+elems(2).Dimensions = 1;
+elems(2).DataType = "Bus: MagnetometerConfigBus";
+elems(2).Description = "Magnetometer sensor configuration";
+
 SensorConfigBus = Simulink.Bus;
 SensorConfigBus.Description = "Sensor configuration bus generated from config/sensors.json";
 SensorConfigBus.Elements = elems;

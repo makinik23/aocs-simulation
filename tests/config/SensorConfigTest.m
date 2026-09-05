@@ -21,7 +21,7 @@ classdef SensorConfigTest < matlab.unittest.TestCase
     end
 
     methods (Test)
-        function defaultConfigLoadsGyroSettings(testCase)
+        function defaultConfigLoadsSensorSettings(testCase)
             % Description:
             %   Verifies that config/sensors.json reaches the validated AOCS
             %   struct and numeric Simulink sensor config payload.
@@ -36,6 +36,8 @@ classdef SensorConfigTest < matlab.unittest.TestCase
                 "config", "AocsSimulationConfig.json"), testCase.ProjectRoot);
             gyro = AOCS.Sensors.Gyro;
             gyroBusConfig = AOCS.SensorConfig.Gyro;
+            magnetometer = AOCS.Sensors.Magnetometer;
+            magnetometerBusConfig = AOCS.SensorConfig.Magnetometer;
 
             testCase.verifyTrue(gyro.Enabled);
             testCase.verifyEqual(gyro.Mode, "nominal");
@@ -50,12 +52,27 @@ classdef SensorConfigTest < matlab.unittest.TestCase
                 "RelTol", 1.0e-15);
             testCase.verifyEqual(gyroBusConfig.misalignment_matrix, eye(3));
             testCase.verifyEqual(gyroBusConfig.failure_valid, 0.0);
+
+            testCase.verifyTrue(magnetometer.Enabled);
+            testCase.verifyEqual(magnetometer.Mode, "nominal");
+            testCase.verifyEqual(magnetometer.SampleTime_s, 0.1);
+            testCase.verifyEqual(magnetometerBusConfig.mode_id, 1.0);
+            testCase.verifyEqual(magnetometerBusConfig.sample_time_s, ...
+                magnetometer.SampleTime_s);
+            testCase.verifyEqual(magnetometerBusConfig.noise_std_T, ...
+                magnetometer.NoiseDensity_T_sqrt_Hz / sqrt(magnetometer.SampleTime_s), ...
+                "RelTol", 1.0e-15);
+            testCase.verifyEqual(magnetometerBusConfig.bias_random_walk_step_std_T, ...
+                magnetometer.BiasRandomWalkStd_T_sqrt_s * sqrt(magnetometer.SampleTime_s), ...
+                "RelTol", 1.0e-15);
+            testCase.verifyEqual(magnetometerBusConfig.misalignment_matrix, eye(3));
+            testCase.verifyEqual(magnetometerBusConfig.failure_valid, 0.0);
         end
 
-        function sensorConfigBusesExposeGyroConfig(testCase)
+        function sensorConfigBusesExposeSensorConfigs(testCase)
             % Description:
-            %   Checks that sensor config buses publish the expected gyro
-            %   configuration contract for Simulink subsystems.
+            %   Checks that sensor config buses publish the expected sensor
+            %   configuration contracts for Simulink subsystems.
             %
             % Arguments:
             %   testCase - matlab.unittest.TestCase instance.
@@ -64,12 +81,17 @@ classdef SensorConfigTest < matlab.unittest.TestCase
             %   None.
 
             createGyroConfigBus("base");
+            createMagnetometerConfigBus("base");
             sensorBus = createSensorConfigBus();
             gyroBus = createGyroConfigBus();
+            magnetometerBus = createMagnetometerConfigBus();
 
-            testCase.verifyEqual(string({sensorBus.Elements.Name}), "Gyro");
+            testCase.verifyEqual(string({sensorBus.Elements.Name}), ...
+                ["Gyro", "Magnetometer"]);
             testCase.verifyEqual(string(sensorBus.Elements(1).DataType), ...
                 "Bus: GyroConfigBus");
+            testCase.verifyEqual(string(sensorBus.Elements(2).DataType), ...
+                "Bus: MagnetometerConfigBus");
             testCase.verifyEqual(string({gyroBus.Elements.Name}), [ ...
                 "enabled", ...
                 "mode_id", ...
@@ -87,12 +109,29 @@ classdef SensorConfigTest < matlab.unittest.TestCase
                 "bias_seed", ...
                 "failure_output_rad_s", ...
                 "failure_valid"]);
+            testCase.verifyEqual(string({magnetometerBus.Elements.Name}), [ ...
+                "enabled", ...
+                "mode_id", ...
+                "sample_time_s", ...
+                "noise_density_T_sqrt_Hz", ...
+                "noise_std_T", ...
+                "bias_initial_T", ...
+                "bias_random_walk_std_T_sqrt_s", ...
+                "bias_random_walk_step_std_T", ...
+                "scale_factor", ...
+                "misalignment_matrix", ...
+                "range_T", ...
+                "resolution_T", ...
+                "noise_seed", ...
+                "bias_seed", ...
+                "failure_output_T", ...
+                "failure_valid"]);
         end
 
-        function sensorMeasurementBusesExposeGyroMeasurement(testCase)
+        function sensorMeasurementBusesExposeSensorMeasurements(testCase)
             % Description:
-            %   Checks that sensor measurement buses publish the expected gyro
-            %   measurement contract for GNC consumers.
+            %   Checks that sensor measurement buses publish the expected sensor
+            %   measurement contracts for GNC consumers.
             %
             % Arguments:
             %   testCase - matlab.unittest.TestCase instance.
@@ -101,16 +140,25 @@ classdef SensorConfigTest < matlab.unittest.TestCase
             %   None.
 
             createGyroMeasurementBus("base");
+            createMagnetometerMeasurementBus("base");
             sensorBus = createSensorMeasurementBus();
             gyroBus = createGyroMeasurementBus();
+            magnetometerBus = createMagnetometerMeasurementBus();
 
-            testCase.verifyEqual(string({sensorBus.Elements.Name}), "Gyro");
+            testCase.verifyEqual(string({sensorBus.Elements.Name}), ...
+                ["Gyro", "Magnetometer"]);
             testCase.verifyEqual(string(sensorBus.Elements(1).DataType), ...
                 "Bus: GyroMeasurementBus");
+            testCase.verifyEqual(string(sensorBus.Elements(2).DataType), ...
+                "Bus: MagnetometerMeasurementBus");
             testCase.verifyEqual(string({gyroBus.Elements.Name}), ...
                 ["omega_rad_s", "valid"]);
             testCase.verifyEqual(gyroBus.Elements(1).Dimensions, [3 1]);
             testCase.verifyEqual(gyroBus.Elements(2).Dimensions, 1.0);
+            testCase.verifyEqual(string({magnetometerBus.Elements.Name}), ...
+                ["B_B_T", "valid"]);
+            testCase.verifyEqual(magnetometerBus.Elements(1).Dimensions, [3 1]);
+            testCase.verifyEqual(magnetometerBus.Elements(2).Dimensions, 1.0);
         end
 
         function setupAssignsOnlyTopLevelSensorConfigParameter(testCase)
@@ -133,8 +181,12 @@ classdef SensorConfigTest < matlab.unittest.TestCase
                 "Bus: SensorConfigBus");
             testCase.verifyEqual(sensorConfig.Value.Gyro.gyro_sample_time_s, ...
                 0.1);
+            testCase.verifyEqual(sensorConfig.Value.Magnetometer.sample_time_s, ...
+                0.1);
             testCase.verifyEqual(evalin("base", ...
                 "exist('AOCS_GyroConfig', 'var')"), 0.0);
+            testCase.verifyEqual(evalin("base", ...
+                "exist('AOCS_MagnetometerConfig', 'var')"), 0.0);
         end
 
         function failureModeMapsToNumericTestMode(testCase)
@@ -159,6 +211,29 @@ classdef SensorConfigTest < matlab.unittest.TestCase
                 [0.01; -0.02; 0.03]);
             testCase.verifyEqual(AOCS.SensorConfig.Gyro.failure_valid, 1.0);
         end
+
+        function magnetometerFailureModeMapsToNumericTestMode(testCase)
+            % Description:
+            %   Verifies that an override config can place the magnetometer in
+            %   failure mode for deterministic sensor tests.
+            %
+            % Arguments:
+            %   testCase - matlab.unittest.TestCase instance.
+            %
+            % Outputs:
+            %   None.
+
+            configFile = writeFailureMagnetometerConfig(testCase.ProjectRoot);
+            cleanupConfig = onCleanup(@() deleteIfFileExists(configFile));
+
+            AOCS = loadAocsSimulationConfig(configFile, testCase.ProjectRoot);
+
+            testCase.verifyEqual(AOCS.Sensors.Magnetometer.Mode, "failure");
+            testCase.verifyEqual(AOCS.SensorConfig.Magnetometer.mode_id, 2.0);
+            testCase.verifyEqual(AOCS.SensorConfig.Magnetometer.failure_output_T, ...
+                [1.0e-6; -2.0e-6; 3.0e-6]);
+            testCase.verifyEqual(AOCS.SensorConfig.Magnetometer.failure_valid, 1.0);
+        end
     end
 end
 
@@ -177,6 +252,29 @@ payload.extends = char(fullfile(projectRoot, "config", "AocsSimulationConfig.jso
 payload.sensors.gyro.mode = "failure";
 payload.sensors.gyro.failure.output_rad_s = [0.01; -0.02; 0.03];
 payload.sensors.gyro.failure.valid = true;
+
+configFile = string(tempname) + ".json";
+fid = fopen(configFile, "w");
+cleanupFile = onCleanup(@() fclose(fid));
+fprintf(fid, "%s", jsonencode(payload, "PrettyPrint", true));
+delete(cleanupFile);
+end
+
+function configFile = writeFailureMagnetometerConfig(projectRoot)
+% Description:
+%   Writes a temporary config overriding only magnetometer failure-mode settings.
+%
+% Arguments:
+%   projectRoot - Project root used to resolve the base AOCS config.
+%
+% Outputs:
+%   configFile - Path to the temporary config file.
+
+payload = struct();
+payload.extends = char(fullfile(projectRoot, "config", "AocsSimulationConfig.json"));
+payload.sensors.magnetometer.mode = "failure";
+payload.sensors.magnetometer.failure.output_T = [1.0e-6; -2.0e-6; 3.0e-6];
+payload.sensors.magnetometer.failure.valid = true;
 
 configFile = string(tempname) + ".json";
 fid = fopen(configFile, "w");
