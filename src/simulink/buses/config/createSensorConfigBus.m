@@ -26,6 +26,18 @@ elems(2).Dimensions = 1;
 elems(2).DataType = "Bus: MagnetometerConfigBus";
 elems(2).Description = "Magnetometer sensor configuration";
 
+elems(3) = Simulink.BusElement;
+elems(3).Name = "CoarseSunSensors";
+elems(3).Dimensions = 1;
+elems(3).DataType = "Bus: CoarseSunSensorConfigBus";
+elems(3).Description = "Coarse sun sensor array configuration";
+
+elems(4) = Simulink.BusElement;
+elems(4).Name = "GNSS";
+elems(4).Dimensions = 1;
+elems(4).DataType = "Bus: GnssConfigBus";
+elems(4).Description = "GNSS receiver configuration";
+
 SensorConfigBus = Simulink.Bus;
 SensorConfigBus.Description = "Sensor configuration bus generated from config/sensors.json";
 SensorConfigBus.Elements = elems;

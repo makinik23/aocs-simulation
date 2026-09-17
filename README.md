@@ -16,7 +16,7 @@ For now, the spacecraft of interest is a simple CubeSat 3U.
 - Rotational dynamics:
     - I * omega_dot = M_total - omega × (I * omega)
     - q_dot = 0.5 * Omega(omega) * q
-    
+
     where:
 
      - M_total = M_external + M_gravity_gradient + M_residual_magnetic + M_SRP + M_aerodynamic
@@ -55,6 +55,7 @@ config/simulation.json
 config/spacecraft_geometry.json
 config/orbit_environment.json
 config/dynamics.json
+config/sensors.json
 ```
 
 Scenarios in `config/scenarios/` override only what changes between experiments.
@@ -102,4 +103,5 @@ Harness models live in `tests/harnesses/`.
 More detail:
 [Frame transformations](docs/transformations.md) and
 [Sun, eclipse, and SRP modeling](docs/sun_environment_modeling.md), plus the
-[atmosphere modeling contract](docs/atmosphere_modeling.md).
+[atmosphere modeling contract](docs/atmosphere_modeling.md) and
+[sensor modeling contract](docs/sensors.md).

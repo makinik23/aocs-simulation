@@ -433,6 +433,9 @@ config = struct();
 config.Gyro = readGyroConfig(requireStruct(sensors, "gyro", "sensors.gyro"));
 config.Magnetometer = readMagnetometerConfig(requireStruct(sensors, ...
     "magnetometer", "sensors.magnetometer"));
+config.CoarseSunSensors = readCoarseSunSensorsConfig(requireStruct(sensors, ...
+    "coarse_sun_sensors", "sensors.coarse_sun_sensors"));
+config.GNSS = readGnssConfig(requireStruct(sensors, "gnss", "sensors.gnss"));
 end
 
 function config = readGyroConfig(gyro)
@@ -527,6 +530,156 @@ config.Failure.Valid = logicalScalarField(failure, "valid", ...
     "sensors.magnetometer.failure.valid");
 end
 
+function config = readCoarseSunSensorsConfig(css)
+% Description:
+%   Validates coarse sun sensor sampling, panel geometry, stochastic,
+%   calibration, and failure-test settings.
+%
+% Arguments:
+%   css - JSON object from sensors.coarse_sun_sensors.
+%
+% Outputs:
+%   config - Struct containing normalized coarse sun sensor settings.
+
+failure = requireStruct(css, "failure", "sensors.coarse_sun_sensors.failure");
+
+config = struct();
+config.Enabled = logicalScalarField(css, "enabled", ...
+    "sensors.coarse_sun_sensors.enabled");
+config.Mode = enumStringField(css, "mode", ...
+    "sensors.coarse_sun_sensors.mode", ["nominal", "failure"]);
+config.SampleTime_s = scalarField(css, "sample_time_s", ...
+    "sensors.coarse_sun_sensors.sample_time_s", true);
+config.PanelNormals_B = matrixField(css, "panel_normals_B", ...
+    "sensors.coarse_sun_sensors.panel_normals_B", 3, 6);
+validateCssPanelNormals(config.PanelNormals_B);
+config.FovHalfAngle_rad = scalarField(css, "fov_half_angle_rad", ...
+    "sensors.coarse_sun_sensors.fov_half_angle_rad", true);
+validateRange(config.FovHalfAngle_rad, 0.0, pi, ...
+    "sensors.coarse_sun_sensors.fov_half_angle_rad");
+config.MinValidIrradiance_W_m2 = nonnegativeScalarField(css, ...
+    "min_valid_irradiance_W_m2", ...
+    "sensors.coarse_sun_sensors.min_valid_irradiance_W_m2");
+config.NoiseDensity_W_m2_sqrt_Hz = nonnegativeScalarField(css, ...
+    "noise_density_W_m2_sqrt_Hz", ...
+    "sensors.coarse_sun_sensors.noise_density_W_m2_sqrt_Hz");
+config.Bias_W_m2 = columnField(css, "bias_W_m2", ...
+    "sensors.coarse_sun_sensors.bias_W_m2", 6);
+config.ScaleFactor = columnField(css, "scale_factor", ...
+    "sensors.coarse_sun_sensors.scale_factor", 6);
+config.Range_W_m2 = scalarField(css, "range_W_m2", ...
+    "sensors.coarse_sun_sensors.range_W_m2", true);
+config.Resolution_W_m2 = scalarField(css, "resolution_W_m2", ...
+    "sensors.coarse_sun_sensors.resolution_W_m2", true);
+config.NoiseSeed = integerScalarField(css, "noise_seed", ...
+    "sensors.coarse_sun_sensors.noise_seed", 0, 2147483647);
+config.Failure.PanelSignals_W_m2 = columnField(failure, ...
+    "panel_signals_W_m2", ...
+    "sensors.coarse_sun_sensors.failure.panel_signals_W_m2", 6);
+config.Failure.Sun_B_unit = columnField(failure, "sun_B_unit", ...
+    "sensors.coarse_sun_sensors.failure.sun_B_unit", 3);
+config.Failure.Sun_B_unit = normalizeOrDefault(config.Failure.Sun_B_unit, ...
+    [1.0; 0.0; 0.0]);
+config.Failure.Irradiance_W_m2 = scalarField(failure, "irradiance_W_m2", ...
+    "sensors.coarse_sun_sensors.failure.irradiance_W_m2", false);
+config.Failure.Valid = logicalScalarField(failure, "valid", ...
+    "sensors.coarse_sun_sensors.failure.valid");
+end
+
+function config = readGnssConfig(gnss)
+% Description:
+%   Validates the flight-data-calibrated GNSS PVT error model, operating
+%   mode, loss-of-fix settings, and deterministic failure-test outputs.
+%
+% Arguments:
+%   gnss - JSON object from sensors.gnss.
+%
+% Outputs:
+%   config - Struct containing normalized GNSS receiver settings.
+
+ionosphere = requireStruct(gnss, "ionosphere", ...
+    "sensors.gnss.ionosphere");
+oncePerOrbit = requireStruct(gnss, "once_per_orbit", ...
+    "sensors.gnss.once_per_orbit");
+gaussMarkov = requireStruct(gnss, "gauss_markov", ...
+    "sensors.gnss.gauss_markov");
+whiteNoise = requireStruct(gnss, "white_noise", ...
+    "sensors.gnss.white_noise");
+failure = requireStruct(gnss, "failure", "sensors.gnss.failure");
+
+config = struct();
+config.Enabled = logicalScalarField(gnss, "enabled", "sensors.gnss.enabled");
+config.Mode = enumStringField(gnss, "mode", "sensors.gnss.mode", ...
+    ["nominal", "dropout", "failure"]);
+config.SampleTime_s = scalarField(gnss, "sample_time_s", ...
+    "sensors.gnss.sample_time_s", true);
+config.AcquisitionTime_s = nonnegativeScalarField(gnss, ...
+    "acquisition_time_s", "sensors.gnss.acquisition_time_s");
+config.DropoutProbabilityPerSample = nonnegativeScalarField(gnss, ...
+    "dropout_probability_per_sample", ...
+    "sensors.gnss.dropout_probability_per_sample");
+validateRange(config.DropoutProbabilityPerSample, 0.0, 1.0, ...
+    "sensors.gnss.dropout_probability_per_sample");
+config.AntennaNoiseScale = nonnegativeScalarField(gnss, ...
+    "antenna_noise_scale", "sensors.gnss.antenna_noise_scale");
+
+config.Ionosphere.VerticalTec_tecu = nonnegativeScalarField(ionosphere, ...
+    "vertical_tec_tecu", "sensors.gnss.ionosphere.vertical_tec_tecu");
+config.Ionosphere.RadialErrorScale_m_per_tecu = ...
+    nonnegativeScalarField(ionosphere, "radial_error_scale_m_per_tecu", ...
+    "sensors.gnss.ionosphere.radial_error_scale_m_per_tecu");
+
+config.OncePerOrbit.OrbitalPeriod_s = scalarField(oncePerOrbit, ...
+    "orbital_period_s", "sensors.gnss.once_per_orbit.orbital_period_s", true);
+config.OncePerOrbit.Phase_rad = scalarField(oncePerOrbit, "phase_rad", ...
+    "sensors.gnss.once_per_orbit.phase_rad", false);
+config.OncePerOrbit.PositionAmplitude_RTN_m = nonnegativeColumnField( ...
+    oncePerOrbit, "position_amplitude_RTN_m", ...
+    "sensors.gnss.once_per_orbit.position_amplitude_RTN_m", 3);
+config.OncePerOrbit.VelocityAmplitude_RTN_m_s = nonnegativeColumnField( ...
+    oncePerOrbit, "velocity_amplitude_RTN_m_s", ...
+    "sensors.gnss.once_per_orbit.velocity_amplitude_RTN_m_s", 3);
+
+config.GaussMarkov.CorrelationTime_s = scalarField(gaussMarkov, ...
+    "correlation_time_s", "sensors.gnss.gauss_markov.correlation_time_s", true);
+config.GaussMarkov.PositionStd_RTN_m = nonnegativeColumnField(gaussMarkov, ...
+    "position_std_RTN_m", "sensors.gnss.gauss_markov.position_std_RTN_m", 3);
+config.GaussMarkov.VelocityStd_RTN_m_s = nonnegativeColumnField(gaussMarkov, ...
+    "velocity_std_RTN_m_s", ...
+    "sensors.gnss.gauss_markov.velocity_std_RTN_m_s", 3);
+
+config.WhiteNoise.PositionStd_RTN_m = nonnegativeColumnField(whiteNoise, ...
+    "position_std_RTN_m", "sensors.gnss.white_noise.position_std_RTN_m", 3);
+config.WhiteNoise.VelocityStd_RTN_m_s = nonnegativeColumnField(whiteNoise, ...
+    "velocity_std_RTN_m_s", ...
+    "sensors.gnss.white_noise.velocity_std_RTN_m_s", 3);
+
+config.PositionResolution_m = scalarField(gnss, "position_resolution_m", ...
+    "sensors.gnss.position_resolution_m", true);
+config.VelocityResolution_m_s = scalarField(gnss, ...
+    "velocity_resolution_m_s", "sensors.gnss.velocity_resolution_m_s", true);
+config.PositionGaussMarkovSeed = integerScalarField(gnss, ...
+    "position_gauss_markov_seed", ...
+    "sensors.gnss.position_gauss_markov_seed", 0, 2147483647);
+config.VelocityGaussMarkovSeed = integerScalarField(gnss, ...
+    "velocity_gauss_markov_seed", ...
+    "sensors.gnss.velocity_gauss_markov_seed", 0, 2147483647);
+config.PositionWhiteNoiseSeed = integerScalarField(gnss, ...
+    "position_white_noise_seed", ...
+    "sensors.gnss.position_white_noise_seed", 0, 2147483647);
+config.VelocityWhiteNoiseSeed = integerScalarField(gnss, ...
+    "velocity_white_noise_seed", ...
+    "sensors.gnss.velocity_white_noise_seed", 0, 2147483647);
+config.DropoutSeed = integerScalarField(gnss, "dropout_seed", ...
+    "sensors.gnss.dropout_seed", 0, 2147483647);
+config.Failure.r_I_m = columnField(failure, "r_I_m", ...
+    "sensors.gnss.failure.r_I_m", 3);
+config.Failure.v_I_m_s = columnField(failure, "v_I_m_s", ...
+    "sensors.gnss.failure.v_I_m_s", 3);
+config.Failure.Valid = logicalScalarField(failure, "valid", ...
+    "sensors.gnss.failure.valid");
+end
+
 function config = buildSensorBusConfig(AOCS)
 % Description:
 %   Selects numeric sensor values intended for Simulink sensor subsystems.
@@ -539,6 +692,8 @@ function config = buildSensorBusConfig(AOCS)
 
 gyro = AOCS.Sensors.Gyro;
 magnetometer = AOCS.Sensors.Magnetometer;
+css = AOCS.Sensors.CoarseSunSensors;
+gnss = AOCS.Sensors.GNSS;
 
 config = struct();
 config.Gyro.enabled = double(gyro.Enabled);
@@ -579,6 +734,70 @@ config.Magnetometer.noise_seed = magnetometer.NoiseSeed;
 config.Magnetometer.bias_seed = magnetometer.BiasSeed;
 config.Magnetometer.failure_output_T = magnetometer.Failure.Output_T;
 config.Magnetometer.failure_valid = double(magnetometer.Failure.Valid);
+
+config.CoarseSunSensors.enabled = double(css.Enabled);
+config.CoarseSunSensors.mode_id = coarseSunSensorModeId(css.Mode);
+config.CoarseSunSensors.sample_time_s = css.SampleTime_s;
+config.CoarseSunSensors.panel_normals_B = css.PanelNormals_B;
+config.CoarseSunSensors.fov_cos = cos(css.FovHalfAngle_rad);
+config.CoarseSunSensors.min_valid_irradiance_W_m2 = ...
+    css.MinValidIrradiance_W_m2;
+config.CoarseSunSensors.noise_density_W_m2_sqrt_Hz = ...
+    css.NoiseDensity_W_m2_sqrt_Hz;
+config.CoarseSunSensors.noise_std_W_m2 = ...
+    css.NoiseDensity_W_m2_sqrt_Hz / sqrt(css.SampleTime_s);
+config.CoarseSunSensors.bias_W_m2 = css.Bias_W_m2;
+config.CoarseSunSensors.scale_factor = css.ScaleFactor;
+config.CoarseSunSensors.range_W_m2 = css.Range_W_m2;
+config.CoarseSunSensors.resolution_W_m2 = css.Resolution_W_m2;
+config.CoarseSunSensors.noise_seed = css.NoiseSeed;
+config.CoarseSunSensors.failure_panel_signals_W_m2 = ...
+    css.Failure.PanelSignals_W_m2;
+config.CoarseSunSensors.failure_sun_B_unit = css.Failure.Sun_B_unit;
+config.CoarseSunSensors.failure_irradiance_W_m2 = ...
+    css.Failure.Irradiance_W_m2;
+config.CoarseSunSensors.failure_valid = double(css.Failure.Valid);
+
+config.GNSS.enabled = double(gnss.Enabled);
+config.GNSS.mode_id = gnssModeId(gnss.Mode);
+config.GNSS.sample_time_s = gnss.SampleTime_s;
+config.GNSS.acquisition_time_s = gnss.AcquisitionTime_s;
+config.GNSS.dropout_probability_per_sample = ...
+    gnss.DropoutProbabilityPerSample;
+config.GNSS.radial_ionosphere_bias_m = ...
+    gnss.Ionosphere.VerticalTec_tecu * ...
+    gnss.Ionosphere.RadialErrorScale_m_per_tecu;
+config.GNSS.once_per_orbit_angular_rate_rad_s = ...
+    2.0 * pi / gnss.OncePerOrbit.OrbitalPeriod_s;
+config.GNSS.once_per_orbit_phase_rad = gnss.OncePerOrbit.Phase_rad;
+config.GNSS.position_periodic_amplitude_RTN_m = ...
+    gnss.OncePerOrbit.PositionAmplitude_RTN_m;
+config.GNSS.velocity_periodic_amplitude_RTN_m_s = ...
+    gnss.OncePerOrbit.VelocityAmplitude_RTN_m_s;
+config.GNSS.gauss_markov_alpha = ...
+    exp(-gnss.SampleTime_s / gnss.GaussMarkov.CorrelationTime_s);
+innovationScale = sqrt(max(0.0, ...
+    1.0 - config.GNSS.gauss_markov_alpha ^ 2));
+config.GNSS.position_gauss_markov_step_std_RTN_m = ...
+    gnss.AntennaNoiseScale * innovationScale * ...
+    gnss.GaussMarkov.PositionStd_RTN_m;
+config.GNSS.velocity_gauss_markov_step_std_RTN_m_s = ...
+    gnss.AntennaNoiseScale * innovationScale * ...
+    gnss.GaussMarkov.VelocityStd_RTN_m_s;
+config.GNSS.position_white_noise_std_RTN_m = ...
+    gnss.AntennaNoiseScale * gnss.WhiteNoise.PositionStd_RTN_m;
+config.GNSS.velocity_white_noise_std_RTN_m_s = ...
+    gnss.AntennaNoiseScale * gnss.WhiteNoise.VelocityStd_RTN_m_s;
+config.GNSS.position_resolution_m = gnss.PositionResolution_m;
+config.GNSS.velocity_resolution_m_s = gnss.VelocityResolution_m_s;
+config.GNSS.position_gauss_markov_seed = gnss.PositionGaussMarkovSeed;
+config.GNSS.velocity_gauss_markov_seed = gnss.VelocityGaussMarkovSeed;
+config.GNSS.position_white_noise_seed = gnss.PositionWhiteNoiseSeed;
+config.GNSS.velocity_white_noise_seed = gnss.VelocityWhiteNoiseSeed;
+config.GNSS.dropout_seed = gnss.DropoutSeed;
+config.GNSS.failure_r_I_m = gnss.Failure.r_I_m;
+config.GNSS.failure_v_I_m_s = gnss.Failure.v_I_m_s;
+config.GNSS.failure_valid = double(gnss.Failure.Valid);
 end
 
 function config = readSunConfig(sun)
@@ -627,6 +846,18 @@ if value < 0.0
 end
 end
 
+function value = nonnegativeColumnField(parent, fieldName, displayName, rows)
+% Description:
+%   Reads a finite column vector and constrains all elements to be
+%   non-negative.
+
+value = columnField(parent, fieldName, displayName, rows);
+if any(value < 0.0)
+    error("AOCS:Config:InvalidField", ...
+        "Config field %s must contain only non-negative values.", displayName);
+end
+end
+
 function value = integerScalarField(parent, fieldName, displayName, minimumValue, maximumValue)
 % Description:
 %   Reads a finite scalar JSON number constrained to an integer range.
@@ -638,6 +869,29 @@ if value < minimumValue || value > maximumValue || value ~= round(value)
         displayName, minimumValue, maximumValue);
 end
 value = double(round(value));
+end
+
+function validateCssPanelNormals(panelNormals_B)
+% Description:
+%   Validates that each coarse-sun-sensor panel normal is a non-zero unit vector.
+
+normalNorms = vecnorm(panelNormals_B, 2, 1);
+if any(abs(normalNorms - 1.0) > 1.0e-12)
+    error("AOCS:Config:InvalidField", ...
+        "sensors.coarse_sun_sensors.panel_normals_B columns must be unit vectors.");
+end
+end
+
+function value = normalizeOrDefault(value, defaultValue)
+% Description:
+%   Normalizes a vector, replacing a near-zero vector with a configured default.
+
+normValue = norm(value);
+if normValue <= 1.0e-12
+    value = defaultValue;
+else
+    value = value ./ normValue;
+end
 end
 
 

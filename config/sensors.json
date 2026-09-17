@@ -91,6 +91,147 @@
         ],
         "valid": false
       }
+    },
+    "coarse_sun_sensors": {
+      "enabled": true,
+      "mode": "nominal",
+      "sample_time_s": 0.1,
+      "panel_normals_B": [
+        [
+          1.0,
+          -1.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          -1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          1.0,
+          -1.0
+        ]
+      ],
+      "fov_half_angle_rad": 1.5707963267948966,
+      "min_valid_irradiance_W_m2": 50.0,
+      "noise_density_W_m2_sqrt_Hz": 0.5,
+      "bias_W_m2": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale_factor": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "range_W_m2": 1500.0,
+      "resolution_W_m2": 0.1,
+      "noise_seed": 25001,
+      "failure": {
+        "panel_signals_W_m2": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "sun_B_unit": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "irradiance_W_m2": 0.0,
+        "valid": false
+      }
+    },
+    "gnss": {
+      "enabled": true,
+      "mode": "nominal",
+      "sample_time_s": 1.0,
+      "acquisition_time_s": 30.0,
+      "dropout_probability_per_sample": 0.0,
+      "antenna_noise_scale": 1.0,
+      "ionosphere": {
+        "vertical_tec_tecu": 15.0,
+        "radial_error_scale_m_per_tecu": 0.64
+      },
+      "once_per_orbit": {
+        "orbital_period_s": 5760.0,
+        "phase_rad": 0.0,
+        "position_amplitude_RTN_m": [
+          0.0,
+          0.0,
+          2.0
+        ],
+        "velocity_amplitude_RTN_m_s": [
+          0.0,
+          0.0,
+          0.05
+        ]
+      },
+      "gauss_markov": {
+        "correlation_time_s": 120.0,
+        "position_std_RTN_m": [
+          10.0,
+          5.0,
+          3.5
+        ],
+        "velocity_std_RTN_m_s": [
+          0.03,
+          0.03,
+          0.03
+        ]
+      },
+      "white_noise": {
+        "position_std_RTN_m": [
+          0.5,
+          0.5,
+          0.5
+        ],
+        "velocity_std_RTN_m_s": [
+          0.005,
+          0.005,
+          0.005
+        ]
+      },
+      "position_resolution_m": 0.01,
+      "velocity_resolution_m_s": 0.001,
+      "position_gauss_markov_seed": 26001,
+      "velocity_gauss_markov_seed": 26002,
+      "position_white_noise_seed": 26003,
+      "velocity_white_noise_seed": 26004,
+      "dropout_seed": 26005,
+      "failure": {
+        "r_I_m": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "v_I_m_s": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "valid": false
+      }
     }
   }
 }

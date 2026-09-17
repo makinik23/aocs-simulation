@@ -26,6 +26,18 @@ elems(2).Dimensions = 1;
 elems(2).DataType = "Bus: MagnetometerMeasurementBus";
 elems(2).Description = "Magnetometer measurement products";
 
+elems(3) = Simulink.BusElement;
+elems(3).Name = "CoarseSunSensors";
+elems(3).Dimensions = 1;
+elems(3).DataType = "Bus: CoarseSunSensorMeasurementBus";
+elems(3).Description = "Coarse sun sensor measurement products";
+
+elems(4) = Simulink.BusElement;
+elems(4).Name = "GNSS";
+elems(4).Dimensions = 1;
+elems(4).DataType = "Bus: GnssMeasurementBus";
+elems(4).Description = "GNSS receiver measurement products";
+
 SensorMeasurementBus = Simulink.Bus;
 SensorMeasurementBus.Description = "Top-level sensor measurement output bus";
 SensorMeasurementBus.Elements = elems;

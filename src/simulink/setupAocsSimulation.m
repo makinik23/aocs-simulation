@@ -47,9 +47,13 @@ createEnvironmentBus("base");
 createPlantStateBus("base");
 createGyroConfigBus("base");
 createMagnetometerConfigBus("base");
+createCoarseSunSensorConfigBus("base");
+createGnssConfigBus("base");
 createSensorConfigBus("base");
 createGyroMeasurementBus("base");
 createMagnetometerMeasurementBus("base");
+createCoarseSunSensorMeasurementBus("base");
+createGnssMeasurementBus("base");
 createSensorMeasurementBus("base");
 
 AOCS_Config = Simulink.Parameter(AOCS.Config);
