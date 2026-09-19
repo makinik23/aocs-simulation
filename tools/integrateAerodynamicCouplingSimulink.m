@@ -17,7 +17,7 @@ load_system(modelFile);
 cleanup = onCleanup(@() closeIfLoaded(modelName));
 applyAocsSimulationSettings(modelName, AOCS);
 
-disturbance = modelName + "/Orbit & Environment/Disturbance Torques";
+disturbance = modelName + "/Flight Dynamics/Orbit & Environment/Disturbance Torques";
 addSentmanPanelModel(disturbance);
 connectAtmosphereConsumers(modelName);
 addOrbitAccelerationInput(modelName);
@@ -28,7 +28,7 @@ save_system(modelName, modelFile);
 end
 
 function connectAtmosphereConsumers(modelName)
-parent = modelName + "/Orbit & Environment";
+parent = modelName + "/Flight Dynamics/Orbit & Environment";
 disturbance = parent + "/Disturbance Torques";
 environmentBusAssembly = parent + "/Environment Bus Assembly";
 
@@ -114,7 +114,7 @@ add_line(parent, "Relative Wind/2", "Disturbance Bus Assembly/8", "autorouting",
 end
 
 function addOrbitAccelerationInput(modelName)
-orbitAndEnvironment = modelName + "/Orbit & Environment";
+orbitAndEnvironment = modelName + "/Flight Dynamics/Orbit & Environment";
 orbitAndTime = orbitAndEnvironment + "/Orbit Propagator & Time";
 orbitState = orbitAndTime + "/Orbit State";
 propagatorSubsystem = orbitState + "/Orbit Propagator";
@@ -154,7 +154,7 @@ add_line(orbitAndEnvironment, "Disturbance Torques/2", ...
 end
 
 function publishAerodynamicProducts(modelName)
-parent = modelName + "/Orbit & Environment/Environment Bus Assembly";
+parent = modelName + "/Flight Dynamics/Orbit & Environment/Environment Bus Assembly";
 selector = parent + "/Select Disturbance";
 busCreator = parent + "/Environment Bus Creator";
 

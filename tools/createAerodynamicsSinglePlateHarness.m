@@ -7,7 +7,7 @@ setupAocsPaths(projectRoot, true);
 
 modelFile = fullfile(projectRoot, "models", "aocs_plant.slx");
 modelName = "aocs_plant";
-owner = modelName + "/Orbit & Environment/Disturbance Torques/" + ...
+owner = modelName + "/Flight Dynamics/Orbit & Environment/Disturbance Torques/" + ...
     "Aerodynamic Disturbance Path/Sentman Multispecies Panels";
 harnessName = "AerodynamicsSinglePlateHarness";
 harnessFile = fullfile(projectRoot, "tests", "harnesses", harnessName + ".slx");

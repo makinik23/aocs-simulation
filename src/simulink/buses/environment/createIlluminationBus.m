@@ -1,4 +1,4 @@
-function AOCS_IlluminationBus = createAocsIlluminationBus(targetWorkspace)
+function IlluminationBus = createIlluminationBus(targetWorkspace)
 % Description:
 %   Defines eclipse and shadowed solar-flux products.
 
@@ -11,12 +11,12 @@ elems(1) = busElement("eclipse_fraction", [1 1], "1", "Fraction of direct solar 
 elems(2) = busElement("sun_visibility", [1 1], "1", "Fraction of direct solar illumination in [0, 1]");
 elems(3) = busElement("solar_flux_shadowed_W_m2", [1 1], "W/m^2", "Solar irradiance after eclipse shadowing");
 
-AOCS_IlluminationBus = Simulink.Bus;
-AOCS_IlluminationBus.Description = "Eclipse and shadowed solar-flux product bus";
-AOCS_IlluminationBus.Elements = elems;
+IlluminationBus = Simulink.Bus;
+IlluminationBus.Description = "Eclipse and shadowed solar-flux product bus";
+IlluminationBus.Elements = elems;
 
 if targetWorkspace == "base"
-    assignin("base", "AOCS_IlluminationBus", AOCS_IlluminationBus);
+    assignin("base", "IlluminationBus", IlluminationBus);
 end
 end
 

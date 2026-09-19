@@ -1,6 +1,6 @@
 function out = run_aocs_simulation(configFile)
 % Description:
-%   Loads the configuration, creates the AOCS bus objects, configures the
+%   Loads the configuration, creates bus objects, configures the
 %   Aerospace Blockset 6DOF block, runs the Simulink plant, and saves the
 %   latest results to the configured results file.
 %

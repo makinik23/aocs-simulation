@@ -32,7 +32,7 @@ classdef AtmosphereProductsTest < matlab.unittest.TestCase
             % Outputs:
             %   None.
 
-            bus = createAocsAtmosphereBus();
+            bus = createAtmosphereBus();
             names = string({bus.Elements.Name});
 
             expectedNames = [ ...
@@ -64,14 +64,14 @@ classdef AtmosphereProductsTest < matlab.unittest.TestCase
             % Outputs:
             %   None.
 
-            createAocsAtmosphereBus("base");
-            bus = createAocsEnvironmentBus();
+            createAtmosphereBus("base");
+            bus = createEnvironmentBus();
             names = string({bus.Elements.Name});
             atmosphereIndex = find(names == "Atmosphere", 1);
 
             testCase.verifyNotEmpty(atmosphereIndex);
             testCase.verifyEqual(string(bus.Elements(atmosphereIndex).DataType), ...
-                "Bus: AOCS_AtmosphereBus");
+                "Bus: AtmosphereBus");
         end
 
         function enabledAtmosphereProducesFiniteScaledProducts(testCase)

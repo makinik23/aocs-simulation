@@ -10,8 +10,8 @@ function [rho_kg_m3, rho_raw_kg_m3, rho_uncertainty_1sigma_kg_m3, ...
 %   r_I_m - Spacecraft inertial position vector [m].
 %   v_I_m_s - Spacecraft inertial velocity vector [m/s].
 %   lla - Geodetic latitude [deg], longitude [deg], altitude [m].
-%   environmentConfig - Struct/bus matching AOCS_EnvironmentConfigBus.
-%   environmentContext - Struct/bus matching AOCS_EnvironmentContextBus.
+%   environmentConfig - Struct/bus matching EnvironmentConfigBus.
+%   environmentContext - Struct/bus matching EnvironmentContextBus.
 
 %#codegen
 

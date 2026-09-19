@@ -36,9 +36,9 @@ end
 
 function publishSrpForceProducts(modelName)
 % Description:
-%   Publishes SRP torque, body force, and pressure on AOCS_SrpBus.
+%   Publishes SRP torque, body force, and pressure on SrpBus.
 
-parent = modelName + "/Orbit & Environment/Environment Products/Solar Radiation Pressure";
+parent = modelName + "/Flight Dynamics/Orbit & Environment/Environment Products/Solar Radiation Pressure";
 srpFunction = parent + "/MATLAB Function";
 busCreator = parent + "/SRP Bus Assembly";
 
@@ -62,7 +62,7 @@ function connectSrpAcceleration(modelName)
 % Description:
 %   Converts SRP body force into inertial acceleration and sums it with aero.
 
-parent = modelName + "/Orbit & Environment/Disturbance Torques";
+parent = modelName + "/Flight Dynamics/Orbit & Environment/Disturbance Torques";
 selectSrp = parent + "/Select SRP";
 srpAcceleration = parent + "/SRP Inertial Acceleration";
 accelerationSum = parent + "/Orbit Acceleration Sum";
@@ -94,7 +94,7 @@ function renameOrbitAccelerationPorts(modelName)
 % Description:
 %   Renames the orbit-propagator acceleration ports from aero-only to generic.
 
-orbitAndEnvironment = modelName + "/Orbit & Environment";
+orbitAndEnvironment = modelName + "/Flight Dynamics/Orbit & Environment";
 orbitAndTime = orbitAndEnvironment + "/Orbit Propagator & Time";
 orbitState = orbitAndTime + "/Orbit State";
 propagatorSubsystem = orbitState + "/Orbit Propagator";
@@ -106,9 +106,9 @@ end
 
 function publishDisturbanceProducts(modelName)
 % Description:
-%   Rebuilds AOCS_DisturbanceBus with SRP and aero acceleration products.
+%   Rebuilds DisturbanceBus with SRP and aero acceleration products.
 
-parent = modelName + "/Orbit & Environment/Disturbance Torques";
+parent = modelName + "/Flight Dynamics/Orbit & Environment/Disturbance Torques";
 busCreator = parent + "/Disturbance Bus Assembly";
 
 for inputIndex = 1:12
@@ -132,9 +132,9 @@ end
 
 function publishEnvironmentProducts(modelName)
 % Description:
-%   Publishes expanded disturbance products on AOCS_EnvironmentBus.
+%   Publishes expanded disturbance products on EnvironmentBus.
 
-parent = modelName + "/Orbit & Environment/Environment Bus Assembly";
+parent = modelName + "/Flight Dynamics/Orbit & Environment/Environment Bus Assembly";
 selector = parent + "/Select Disturbance";
 busCreator = parent + "/Environment Bus Creator";
 
@@ -158,8 +158,8 @@ function markLoggedSignals(modelName)
 % Description:
 %   Marks SRP and translational disturbance products for logsout diagnostics.
 
-srpFunction = modelName + "/Orbit & Environment/Environment Products/Solar Radiation Pressure/MATLAB Function";
-disturbance = modelName + "/Orbit & Environment/Disturbance Torques";
+srpFunction = modelName + "/Flight Dynamics/Orbit & Environment/Environment Products/Solar Radiation Pressure/MATLAB Function";
+disturbance = modelName + "/Flight Dynamics/Orbit & Environment/Disturbance Torques";
 srpAcceleration = firstExistingBlock([ ...
     disturbance + "/SRP Disturbance Path/SRP Inertial Acceleration", ...
     disturbance + "/SRP Inertial Acceleration"]);

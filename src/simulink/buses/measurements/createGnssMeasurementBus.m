@@ -1,28 +1,32 @@
-function AOCS_OrbitStateBus = createAocsOrbitStateBus(targetWorkspace)
+function GnssMeasurementBus = createGnssMeasurementBus(targetWorkspace)
 % Description:
-%   Defines the runtime orbit state produced by the orbit propagator.
+%   Defines GNSS position and velocity measurement products consumed by GNC.
 %
 % Arguments:
 %   targetWorkspace - Optional workspace selector. Use "base" to assign the
 %                     bus object to the MATLAB base workspace.
 %
 % Outputs:
-%   AOCS_OrbitStateBus - Simulink.Bus object for orbit state signals.
+%   GnssMeasurementBus - Simulink.Bus object for GNSS measurements.
 
 if nargin < 1
     targetWorkspace = "base";
 end
 targetWorkspace = string(targetWorkspace);
 
-elems(1) = busElement("r_I_m", [3 1], "m", "Spacecraft inertial position vector");
-elems(2) = busElement("v_I_m_s", [3 1], "m/s", "Spacecraft inertial velocity vector");
+elems(1) = busElement("r_I_m", [3 1], "m", ...
+    "Measured spacecraft inertial position from the GNSS receiver");
+elems(2) = busElement("v_I_m_s", [3 1], "m/s", ...
+    "Measured spacecraft inertial velocity from the GNSS receiver");
+elems(3) = busElement("valid", 1, "1", ...
+    "GNSS navigation-fix validity flag; 1 = valid, 0 = invalid");
 
-AOCS_OrbitStateBus = Simulink.Bus;
-AOCS_OrbitStateBus.Description = "Orbit propagator state output bus";
-AOCS_OrbitStateBus.Elements = elems;
+GnssMeasurementBus = Simulink.Bus;
+GnssMeasurementBus.Description = "GNSS receiver measurement output bus";
+GnssMeasurementBus.Elements = elems;
 
 if targetWorkspace == "base"
-    assignin("base", "AOCS_OrbitStateBus", AOCS_OrbitStateBus);
+    assignin("base", "GnssMeasurementBus", GnssMeasurementBus);
 end
 end
 

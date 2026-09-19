@@ -15,7 +15,13 @@ paths = [
     fullfile(rootDirectory, "src", "analysis")
     fullfile(rootDirectory, "src", "config")
     fullfile(rootDirectory, "src", "environment")
+    fullfile(rootDirectory, "src", "sensors")
     fullfile(rootDirectory, "src", "simulink")
+    fullfile(rootDirectory, "src", "simulink", "buses")
+    fullfile(rootDirectory, "src", "simulink", "buses", "config")
+    fullfile(rootDirectory, "src", "simulink", "buses", "environment")
+    fullfile(rootDirectory, "src", "simulink", "buses", "measurements")
+    fullfile(rootDirectory, "src", "simulink", "buses", "state")
     fullfile(rootDirectory, "tools")
 ];
 

@@ -62,7 +62,7 @@ The Sun position is provided by the Aerospace Blockset `Planetary Ephemeris`
 block in:
 
 ```text
-models/aocs_plant.slx/Orbit & Environment/Sun Products
+models/aocs_plant.slx/Flight Dynamics/Orbit & Environment/Sun Products
 ```
 
 The block is configured for:
@@ -131,7 +131,7 @@ The eclipse model is the Aerospace Blockset `Eclipse Shadow Model (Dual Cone)`
 inside:
 
 ```text
-models/aocs_plant.slx/Orbit & Environment/Eclipse Model
+models/aocs_plant.slx/Flight Dynamics/Orbit & Environment/Eclipse Model
 ```
 
 Its spacecraft-position input is connected to `r_I_m`, the spacecraft inertial
@@ -139,7 +139,7 @@ position vector in meters.
 
 The project maps the block `Fraction` output to the `sun_visibility` signal. The
 block also provides `Region_Earth` and `Region_Moon`, but those outputs are not
-currently part of `AOCS_EnvironmentBus`.
+currently part of `EnvironmentBus`.
 
 When `environment.eclipse.enabled` is false, the subsystem bypasses the eclipse
 block output and forces full direct illumination.

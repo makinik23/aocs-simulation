@@ -1,4 +1,4 @@
-function AOCS_MagneticFieldBus = createAocsMagneticFieldBus(targetWorkspace)
+function MagneticFieldBus = createMagneticFieldBus(targetWorkspace)
 % Description:
 %   Defines geomagnetic field products used by sensors and disturbance models.
 
@@ -10,12 +10,12 @@ targetWorkspace = string(targetWorkspace);
 elems(1) = busElement("B_B_T", [3 1], "T", "Geomagnetic field vector expressed in body axes");
 elems(2) = busElement("B_I_T", [3 1], "T", "Geomagnetic field vector expressed in inertial axes");
 
-AOCS_MagneticFieldBus = Simulink.Bus;
-AOCS_MagneticFieldBus.Description = "Geomagnetic field product bus";
-AOCS_MagneticFieldBus.Elements = elems;
+MagneticFieldBus = Simulink.Bus;
+MagneticFieldBus.Description = "Geomagnetic field product bus";
+MagneticFieldBus.Elements = elems;
 
 if targetWorkspace == "base"
-    assignin("base", "AOCS_MagneticFieldBus", AOCS_MagneticFieldBus);
+    assignin("base", "MagneticFieldBus", MagneticFieldBus);
 end
 end
 

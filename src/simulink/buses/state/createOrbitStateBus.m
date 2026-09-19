@@ -1,31 +1,28 @@
-function AOCS_StateBus = createAocsStateBus(targetWorkspace)
+function OrbitStateBus = createOrbitStateBus(targetWorkspace)
 % Description:
-%   Defines the plant output contract: Euler attitude, quaternion, DCM, and
-%   body angular rate signals from the 6DOF block.
+%   Defines the runtime orbit state produced by the orbit propagator.
 %
 % Arguments:
 %   targetWorkspace - Optional workspace selector. Use "base" to assign the
 %                     bus object to the MATLAB base workspace.
 %
 % Outputs:
-%   AOCS_StateBus - Simulink.Bus object for logged attitude state.
+%   OrbitStateBus - Simulink.Bus object for orbit state signals.
 
 if nargin < 1
     targetWorkspace = "base";
 end
 targetWorkspace = string(targetWorkspace);
 
-elems(1) = busElement("euler_rad", [3 1], "rad", "Euler attitude angles [roll pitch yaw] from Aerospace Blockset 6DOF");
-elems(2) = busElement("q_be", [4 1], "1", "Quaternion output from Aerospace Blockset 6DOF");
-elems(3) = busElement("DCM_be", [3 3], "1", "Direction cosine matrix output from Aerospace Blockset 6DOF");
-elems(4) = busElement("omega_b", [3 1], "rad/s", "Body angular rates [p q r]");
+elems(1) = busElement("r_I_m", [3 1], "m", "Spacecraft inertial position vector");
+elems(2) = busElement("v_I_m_s", [3 1], "m/s", "Spacecraft inertial velocity vector");
 
-AOCS_StateBus = Simulink.Bus;
-AOCS_StateBus.Description = "Attitude dynamics state output bus";
-AOCS_StateBus.Elements = elems;
+OrbitStateBus = Simulink.Bus;
+OrbitStateBus.Description = "Orbit propagator state output bus";
+OrbitStateBus.Elements = elems;
 
 if targetWorkspace == "base"
-    assignin("base", "AOCS_StateBus", AOCS_StateBus);
+    assignin("base", "OrbitStateBus", OrbitStateBus);
 end
 end
 

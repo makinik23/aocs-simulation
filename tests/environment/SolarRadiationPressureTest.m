@@ -101,8 +101,8 @@ classdef SolarRadiationPressureTest < matlab.unittest.TestCase
             % Outputs:
             %   None.
 
-            srpBus = createAocsSrpBus();
-            disturbanceBus = createAocsDisturbanceBus();
+            srpBus = createSrpBus();
+            disturbanceBus = createDisturbanceBus();
             disturbanceNames = string({disturbanceBus.Elements.Name});
 
             testCase.verifyEqual(string({srpBus.Elements.Name}), ...

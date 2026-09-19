@@ -1,4 +1,4 @@
-function AOCS_EnvironmentConfigBus = createAocsEnvironmentConfigBus(targetWorkspace)
+function EnvironmentConfigBus = createEnvironmentConfigBus(targetWorkspace)
 % Description:
 %   Defines numeric environment and disturbance configuration values.
 %
@@ -7,7 +7,7 @@ function AOCS_EnvironmentConfigBus = createAocsEnvironmentConfigBus(targetWorksp
 %                     bus object to the MATLAB base workspace.
 %
 % Outputs:
-%   AOCS_EnvironmentConfigBus - Simulink.Bus object for environment config.
+%   EnvironmentConfigBus - Simulink.Bus object for environment config.
 
 if nargin < 1
     targetWorkspace = "base";
@@ -42,12 +42,12 @@ elems(20) = busElement("f30_81d_sfu", 1, "1", ...
     "Nominal 81-day mean F30 solar flux driver for DTM2020 research mode [sfu]");
 elems(21) = busElement("hp60", 1, "1", "Nominal hourly Hp60 geomagnetic driver for DTM2020 research mode");
 
-AOCS_EnvironmentConfigBus = Simulink.Bus;
-AOCS_EnvironmentConfigBus.Description = "Environment configuration bus generated from config/AocsSimulationConfig.json";
-AOCS_EnvironmentConfigBus.Elements = elems;
+EnvironmentConfigBus = Simulink.Bus;
+EnvironmentConfigBus.Description = "Environment configuration bus generated from config/AocsSimulationConfig.json";
+EnvironmentConfigBus.Elements = elems;
 
 if targetWorkspace == "base"
-    assignin("base", "AOCS_EnvironmentConfigBus", AOCS_EnvironmentConfigBus);
+    assignin("base", "EnvironmentConfigBus", EnvironmentConfigBus);
 end
 end
 

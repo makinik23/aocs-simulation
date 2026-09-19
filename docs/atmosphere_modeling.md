@@ -25,7 +25,7 @@ source and a timestamped space-weather provider.
 
 ## Runtime Products
 
-`AOCS_AtmosphereBus` publishes:
+`AtmosphereBus` publishes:
 
 ```text
 rho_kg_m3                       scaled neutral mass density [kg/m^3]
@@ -58,7 +58,7 @@ LLA, UTC context, F10.7/Kp
   -> Prepare DTM2020 Inputs
   -> dtm2020_sfun
   -> Postprocess DTM2020
-  -> AOCS_AtmosphereBus
+  -> AtmosphereBus
 ```
 
 Relevant sources are:

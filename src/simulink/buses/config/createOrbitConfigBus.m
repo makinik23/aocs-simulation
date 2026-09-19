@@ -1,4 +1,4 @@
-function AOCS_OrbitConfigBus = createAocsOrbitConfigBus(targetWorkspace)
+function OrbitConfigBus = createOrbitConfigBus(targetWorkspace)
 % Description:
 %   Defines numeric orbit configuration consumed by orbit/environment
 %   subsystems.
@@ -8,7 +8,7 @@ function AOCS_OrbitConfigBus = createAocsOrbitConfigBus(targetWorkspace)
 %                     bus object to the MATLAB base workspace.
 %
 % Outputs:
-%   AOCS_OrbitConfigBus - Simulink.Bus object for orbit configuration.
+%   OrbitConfigBus - Simulink.Bus object for orbit configuration.
 
 if nargin < 1
     targetWorkspace = "base";
@@ -28,12 +28,12 @@ elems(10) = busElement("true_anomaly_rad", [1 1], "rad", "Initial Keplerian true
 elems(11) = busElement("r_I_m", [3 1], "m", "Initial inertial Cartesian position");
 elems(12) = busElement("v_I_m_s", [3 1], "m/s", "Initial inertial Cartesian velocity");
 
-AOCS_OrbitConfigBus = Simulink.Bus;
-AOCS_OrbitConfigBus.Description = "Orbit configuration bus generated from config/AocsSimulationConfig.json";
-AOCS_OrbitConfigBus.Elements = elems;
+OrbitConfigBus = Simulink.Bus;
+OrbitConfigBus.Description = "Orbit configuration bus generated from config/AocsSimulationConfig.json";
+OrbitConfigBus.Elements = elems;
 
 if targetWorkspace == "base"
-    assignin("base", "AOCS_OrbitConfigBus", AOCS_OrbitConfigBus);
+    assignin("base", "OrbitConfigBus", OrbitConfigBus);
 end
 end
 

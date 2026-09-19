@@ -16,7 +16,7 @@ setupAocsSimulation(fullfile(projectRoot, "config", "AocsSimulationConfig.json")
 load_system(modelFile);
 cleanup = onCleanup(@() closeIfLoaded(modelName));
 
-parent = modelName + "/Orbit & Environment/Environment Products/" + ...
+parent = modelName + "/Flight Dynamics/Orbit & Environment/Environment Products/" + ...
     "Atmosphere Products/Atmosphere Model";
 pipeline = parent + "/Atmosphere Products";
 

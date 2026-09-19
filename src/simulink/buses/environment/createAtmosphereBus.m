@@ -1,4 +1,4 @@
-function AOCS_AtmosphereBus = createAocsAtmosphereBus(targetWorkspace)
+function AtmosphereBus = createAtmosphereBus(targetWorkspace)
 % Description:
 %   Defines atmosphere runtime products consumed by aerodynamic force and
 %   torque models.
@@ -8,7 +8,7 @@ function AOCS_AtmosphereBus = createAocsAtmosphereBus(targetWorkspace)
 %                     bus object to the MATLAB base workspace.
 %
 % Outputs:
-%   AOCS_AtmosphereBus - Simulink.Bus object for atmosphere products.
+%   AtmosphereBus - Simulink.Bus object for atmosphere products.
 
 if nargin < 1
     targetWorkspace = "base";
@@ -40,12 +40,12 @@ elems(11) = busElement("n_N_m3", 1, "1/m^3", ...
 elems(12) = busElement("v_atm_I_m_s", [3 1], "m/s", ...
     "Atmosphere co-rotation and wind velocity expressed in inertial axes");
 
-AOCS_AtmosphereBus = Simulink.Bus;
-AOCS_AtmosphereBus.Description = "Runtime atmosphere product bus";
-AOCS_AtmosphereBus.Elements = elems;
+AtmosphereBus = Simulink.Bus;
+AtmosphereBus.Description = "Runtime atmosphere product bus";
+AtmosphereBus.Elements = elems;
 
 if targetWorkspace == "base"
-    assignin("base", "AOCS_AtmosphereBus", AOCS_AtmosphereBus);
+    assignin("base", "AtmosphereBus", AtmosphereBus);
 end
 end
 
