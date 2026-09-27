@@ -1,107 +1,115 @@
 # AOCS Simulator
-Attitude and Orbit Control System simulation environment in MATLAB/Simulink. It ties
-together flight dynamics simulation and GNC algorithms.
 
-## Flight dynamics
+MATLAB/Simulink simulation of a 3U CubeSat: attitude/orbit dynamics, environment,
+measurement models and onboard sensor acquisition. The current milestone adds an
+independent onboard SGP4 orbit reference, inertial Sun/magnetic references and
+TRIAD attitude initialization. A six-state MEKF is the next GNC increment.
 
-For now, the spacecraft of interest is a simple CubeSat 3U.
+```text
+Flight Dynamics -> Sensors -> Drivers -> GNC
+     truth       measurements   reports    SGP4 references + TRIAD
+```
 
-- High precision orbit propagator:
-    - EGM2008 gravity model.
-    - IGRF14 magnetic field model.
-    - Sun and Moon third body gravity.
-    - Aerodynamic drag based on DTM2020 atmosphere and Sentman free-molecular flow equations.
-    - A lumped constant-area SRP model with Earth–Moon dual-cone eclipse shadowing.
-    - Gravity gradient and residual magnetic moment.
-- Rotational dynamics:
-    - I * omega_dot = M_total - omega × (I * omega)
-    - q_dot = 0.5 * Omega(omega) * q
+The plant includes EGM2008 spherical harmonics, Sun/Moon third-body gravity,
+IGRF14, DTM2020 atmosphere, Sentman free-molecular aerodynamics, solar radiation
+pressure with eclipse shadowing, gravity-gradient and residual magnetic torque.
+Attitude dynamics use `I * omega_dot = M_total - omega × (I * omega)` with a
+scalar-first inertial-to-body quaternion. All interfaces document units and frames.
 
-    where:
+Gyroscope, magnetometer, coarse Sun sensors and GNSS have typed measurement buses.
+An event-driven driver per sensor captures each received payload, receipt timestamp
+and sequence number. GNC uses an onboard SGP4 propagator, independent of GNSS, to
+generate Sun and magnetic inertial reference vectors. TRIAD combines those vectors
+with magnetometer and coarse Sun sensor reports to initialize `q_BI`. GNSS remains
+a measurement for a future navigation filter; the MEKF subsystem is still empty.
 
-     - M_total = M_external + M_gravity_gradient + M_residual_magnetic + M_SRP + M_aerodynamic
-- Configuration scenarios for repeatable mission cases and disturbance studies.
-- Model validation against external flight/reference data: Sentinel-1A POD for ECI/ECEF transformations,
-  Swarm A MAG/VirES for geomagnetic field output, and Planet Dove 3U OEM data for orbit propagation.
+## Start here
 
-## Run
+Baseline: **MATLAB R2025a, Simulink, Aerospace Blockset, Aerospace Toolbox**.
+Open the MATLAB Project in this folder, or run from the cloned repository root:
 
 ```matlab
-run_aocs_simulation
+bootstrapAocs("core")
+run_aocs_tests("core")
+```
+
+The core suite needs no Fortran compiler or downloaded DTM2020 source. For the full
+plant, configure a supported C MEX compiler and GNU Fortran, then:
+
+```matlab
+bootstrapAocs("full")
+run_aocs_tests("full")
+[out, config, runDirectory] = run_aocs_simulation;
 plot_attitude_results
 plot_orbit_environment_results
 ```
 
-Clean generated MATLAB/Simulink artifacts without removing local dependencies:
+See [getting started](docs/getting_started.md) for platform support, dependencies,
+Apple-silicon CLT setup, optional datasets and troubleshooting. **Windows native
+DTM2020 is not supported yet**; the Windows CI job covers the core suite.
+
+## Repository layout
+
+The root keeps the MATLAB Project, this README and four entry points:
+`bootstrapAocs`, `run_aocs_simulation`, `run_aocs_tests` and `setupAocsPaths`.
+
+| Folder | Contents |
+|---|---|
+| `models/` | Simulink plant |
+| `src/` | Configuration loaders, physics, sensors and bus definitions |
+| `src/analysis/` | Plotting, result validation and visualization export |
+| `config/` | Parameters and simulation scenarios |
+| `tools/project/`, `tools/diagnostics/` | Project lifecycle, cleanup and read-only diagnostics |
+| `tools/provenance/`, `tools/native/` | Reproducibility helpers and native DTM2020 build management |
+| `tools/model_builders/` | Optional visual styling; model geometry is edited directly in Simulink |
+| `tests/`, `validation/` | Automated tests, harnesses and external references |
+| `docs/`, `resources/project/` | Documentation and MATLAB Project metadata |
+| `build/`, `results/`, `test-results/` | Ignored build/cache files and run reports |
+
+Open the project or call `setupAocsPaths` to make the analysis and tool commands
+available by name. The categorized tool folders are documented in
+`tools/README.md`. Simulink cache and code generation use `build/simulink/`.
+
+## Reproducible experiments
+
+`config/AocsSimulationConfig.json` composes simulation, geometry, orbit/environment,
+dynamics, sensor and GNC JSON files. Scenarios override only the changed values:
 
 ```matlab
-setupAocsPaths
-cleanAocsArtifacts
-```
-
-Scenario examples:
-
-```matlab
-run_aocs_simulation("config/scenarios/high_precision.json")
 run_aocs_simulation("config/scenarios/no_disturbance_torques.json")
 ```
 
-## Configuration
+Each run stores resolved configuration, MATLAB/product versions, Git state and
+source hashes beside its result in a unique `results/runs/` directory. Scenario
+values and block-mask overrides are scoped with `Simulink.SimulationInput`.
+The configured latest-result file is retained for the plotting scripts.
 
-The main config is `config/AocsSimulationConfig.json`, composed from:
+## Verification
 
-```text
-config/simulation.json
-config/spacecraft_geometry.json
-config/orbit_environment.json
-config/dynamics.json
-config/sensors.json
-```
+`run_aocs_tests` exports JUnit XML, JSON counts and detailed MATLAB results.
+Sensor tests form one suite, `tests/sensors/SensorsTest.m`, grouped by tags:
+Configuration, Contracts, Wiring, MeasurementModels, Acquisition and Integration.
+Attitude-initialization tests live in `tests/gnc/AttitudeInitializationTest.m` and
+cover SGP4 independence from GNSS, reference/initialization contracts, TRIAD
+geometry and compiled wiring.
+Other suites verify configuration infrastructure, equations, dedicated Simulink
+harnesses and external references. CI defines a three-platform core matrix and a
+Linux full-plant job; remote execution is separate evidence from local testing.
 
-Scenarios in `config/scenarios/` override only what changes between experiments.
-The default plant uses numerical high-precision propagation with all environment options (mentioned in Flight Dynamics Section) enabled.
+External checks use Sentinel POD with an independent ERFA/SOFA transformation
+reference, Swarm magnetic-field data and optional Planet Dove **predicted** OEM
+states. These establish bounded comparisons, not flight qualification or a
+mission-wide accuracy guarantee. Optional missing/long cases are reported as
+skipped, never passed.
 
-## DTM2020 Setup
+- [Engineering rules, adapted MAB subset and requirement-to-test mapping](docs/engineering.md)
+- [Local verification results and limitations](docs/verification.md)
+- [Sensor and driver contracts](docs/sensors.md)
+- [State estimation](docs/state_estimation.md)
+- [Frames and time](docs/transformations.md)
+- [Sun, eclipse and SRP](docs/sun_environment_modeling.md)
+- [Atmosphere](docs/atmosphere_modeling.md)
 
-```bash
-git clone https://github.com/swami-h2020-eu/mcm.git \
-    third_party/dtm2020/upstream
-git -C third_party/dtm2020/upstream checkout \
-    a488a7c9d030bfbe86e88ab3d28a7ec5589b92e0
-```
-
-```matlab
-addpath("tools")
-buildDtm2020Native
-run_aocs_simulation
-```
-
-## Tests
-
-Model validation is based on dedicated Simulink harnesses and real flight data. The
-ECI/ECEF transformation harness is checked against Sentinel-1A precise orbit
-products with an independent ERFA/SOFA reference.
-The geomagnetic environment harness is checked against Swarm A MAG Level-1B data
-from VirES, including the onboard magnetic-field measurements and VirES IGRF
-reference.
-Orbit propagation is also checked end-to-end against Planet Dove 3U OEM ephemeris
-data. The validation initializes the plant from the OEM Cartesian state and
-compares propagated ECI position/velocity residuals over a short default arc.
-Longer one-orbit and 24h Planet Dove checks are opt-in with
-`AOCS_RUN_LONG_EXTERNAL_VALIDATION=1`.
-
-```matlab
-runtests("tests/transformations")
-runtests("tests/orbit_and_environment/SwarmMagneticValidationTest.m")
-runtests("tests/orbit_and_environment/PlanetDoveOrbitPropagationValidationTest.m")
-runtests("tests/environment")
-```
-
-Validation data and download/reference-generation scripts live in `validation/`.
-Harness models live in `tests/harnesses/`.
-
-More detail:
-[Frame transformations](docs/transformations.md) and
-[Sun, eclipse, and SRP modeling](docs/sun_environment_modeling.md), plus the
-[atmosphere modeling contract](docs/atmosphere_modeling.md) and
-[sensor modeling contract](docs/sensors.md).
+Validation fixtures/provenance live in `validation/`; harnesses in `tests/harnesses/`.
+Review dataset and third-party license terms before redistribution. No blanket
+license for those external assets is implied by this repository.

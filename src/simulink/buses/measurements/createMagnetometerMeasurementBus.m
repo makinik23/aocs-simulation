@@ -1,6 +1,6 @@
 function MagnetometerMeasurementBus = createMagnetometerMeasurementBus(targetWorkspace)
 % Description:
-%   Defines magnetometer measurement products consumed by downstream GNC.
+%   Defines magnetometer measurement products consumed by onboard drivers.
 %
 % Arguments:
 %   targetWorkspace - Optional workspace selector. Use "base" to assign the

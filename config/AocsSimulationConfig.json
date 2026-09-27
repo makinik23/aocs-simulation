@@ -5,7 +5,8 @@
     "spacecraft_geometry.json",
     "orbit_environment.json",
     "dynamics.json",
-    "sensors.json"
+    "sensors.json",
+    "gnc.json"
   ],
   "mission": {
     "name": "leo_orbit_environment_disturbed_rigid_body",

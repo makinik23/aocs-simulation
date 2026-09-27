@@ -15,13 +15,6 @@ candidates = find_system(modelName, ...
     "FollowLinks", "on", ...
     "Type", "Block");
 
-blocks = {};
-for k = 1:numel(candidates)
-    try
-        if string(get_param(candidates{k}, "BlockType")) == string(blockType)
-            blocks{end + 1} = candidates{k}; %#ok<AGROW>
-        end
-    catch
-    end
-end
+types = get_param(candidates, "BlockType");
+blocks = candidates(string(types) == string(blockType));
 end

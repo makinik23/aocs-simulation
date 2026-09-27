@@ -1,0 +1,53 @@
+name: MATLAB verification
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  core:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, windows-2022, macos-14]
+    runs-on: ${{ matrix.os }}
+    env:
+      MLM_LICENSE_TOKEN: ${{ secrets.MLM_LICENSE_TOKEN }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: matlab-actions/setup-matlab@v3
+        with:
+          release: R2025a
+          products: Simulink Aerospace_Blockset Aerospace_Toolbox
+      - uses: matlab-actions/run-command@v3
+        with:
+          command: bootstrapAocs("core"); run_aocs_tests("core");
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: core-${{ matrix.os }}
+          path: test-results/
+          if-no-files-found: warn
+  linux-full:
+    runs-on: ubuntu-22.04
+    env:
+      MLM_LICENSE_TOKEN: ${{ secrets.MLM_LICENSE_TOKEN }}
+    steps:
+      - uses: actions/checkout@v6
+      - run: sudo apt-get update && sudo apt-get install -y gfortran
+      - uses: matlab-actions/setup-matlab@v3
+        with:
+          release: R2025a
+          products: Simulink Aerospace_Blockset Aerospace_Toolbox
+      - uses: matlab-actions/run-command@v3
+        with:
+          command: mex -setup C; bootstrapAocs("full"); run_aocs_tests("full");
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: linux-full
+          path: |
+            test-results/
+            build/native/dtm2020/*/build-manifest.json
+          if-no-files-found: warn

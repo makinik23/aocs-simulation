@@ -44,4 +44,4 @@ results/basilisk/
 **/*_vizard.bin
 export_basilisk_visualization.m
 src/analysis/exportBasiliskDataFile.m
-tools/create_vizard_message_file.py
+tools/visualization/create_vizard_message_file.py

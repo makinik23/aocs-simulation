@@ -17,7 +17,7 @@ classdef Dtm2020NativeTest < matlab.unittest.TestCase
 
             testCase.ProjectRoot = projectRoot();
             setupAocsPaths(testCase.ProjectRoot, true);
-            testCase.NativeArtifacts = buildDtm2020Native();
+            testCase.NativeArtifacts = requireDtm2020Native();
         end
     end
 

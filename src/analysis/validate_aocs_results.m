@@ -1,0 +1,99 @@
+function report = validate_aocs_results(resultsFile)
+% Description:
+%   Runs a local dynamics sanity check on saved simulation results. The function
+%   extracts body rates from the logged AOCS state, reports rotational energy
+%   and angular momentum norm drift, and applies strict conservation checks only
+%   for torque-free simulations. Flight-data validation lives in Simulink
+%   harness tests under tests/.
+%
+% Arguments:
+%   resultsFile - Optional MAT-file containing simulation output variable out.
+%
+% Outputs:
+%   report - Struct with source name, energy drift, momentum drift,
+%            disturbance-torque magnitude, and conservation diagnostics.
+
+projectRoot = setupAocsPaths();
+
+if nargin < 1 || strlength(string(resultsFile)) == 0
+    defaultAOCS = loadAocsSimulationConfig(fullfile(projectRoot, "config", "AocsSimulationConfig.json"), projectRoot);
+    resultsFile = defaultAOCS.Results.File;
+end
+
+loaded = load(resultsFile);
+out = loaded.out;
+
+if isfield(loaded, "AOCS")
+    AOCS = loaded.AOCS;
+else
+    error("AOCS:Validation:MissingConfiguration", ...
+        "The result file must contain its original AOCS configuration.");
+end
+
+state = extractAocsState(out);
+omegaData = loggedSignalMatrix(state.omega_b.Data, 3, "omega_b");
+invariants = computeAocsInvariants(omegaData, AOCS.Spacecraft.I_B);
+maxDisturbanceTorque = maxLoggedDisturbanceTorque(out, AOCS);
+isTorqueFree = maxDisturbanceTorque < 1e-14;
+
+energyError = max(abs(invariants.E_rot - invariants.E_rot(1)));
+momentumError = max(abs(invariants.H_norm - invariants.H_norm(1)));
+
+fprintf("\n");
+fprintf("Diagnostic source : %s.omega_b + configured I_B\n", char(state.Source));
+fprintf("Energy drift      : %.3e\n", energyError);
+fprintf("Momentum drift    : %.3e\n", momentumError);
+fprintf("Max disturbance   : %.3e N*m\n", maxDisturbanceTorque);
+fprintf("\n");
+
+if isTorqueFree
+    if energyError < AOCS.Numerics.MaxAllowedEnergyDrift
+        disp("Energy conserved.")
+    else
+        error("AOCS:Validation:EnergyDrift", "Torque-free energy drift exceeds the configured limit.");
+    end
+
+    if momentumError < AOCS.Numerics.MaxAllowedHnormDrift
+        disp("Angular momentum conserved.")
+    else
+        error("AOCS:Validation:MomentumDrift", "Torque-free momentum drift exceeds the configured limit.");
+    end
+else
+    disp("Nonzero modeled disturbance torque detected; conservation is reported as a diagnostic, not a pass/fail check.")
+end
+
+report = struct();
+report.Source = state.Source;
+report.EnergyDrift = energyError;
+report.MomentumDrift = momentumError;
+report.MaxDisturbanceTorque = maxDisturbanceTorque;
+report.TorqueFree = isTorqueFree;
+report.EnergyConserved = isTorqueFree && energyError < AOCS.Numerics.MaxAllowedEnergyDrift;
+report.MomentumConserved = isTorqueFree && momentumError < AOCS.Numerics.MaxAllowedHnormDrift;
+end
+
+function maxTorque = maxLoggedDisturbanceTorque(out, AOCS)
+% Description:
+%   Returns the maximum modeled body disturbance torque from logs when
+%   available. Missing evidence is an error, never a torque-free assumption.
+%
+% Arguments:
+%   out - Simulink.SimulationOutput from a plant simulation.
+%   AOCS - Validated configuration struct.
+%
+% Outputs:
+%   maxTorque - Maximum body disturbance torque norm [N*m].
+
+if ~ismember('logsout', out.who)
+    error("AOCS:Validation:MissingTorqueLog", "Cannot classify torque-free motion without logsout.");
+end
+logsout = out.logsout;
+if ~ismember('M_dist_B_Nm', logsout.getElementNames)
+    error("AOCS:Validation:MissingTorqueLog", "Cannot classify torque-free motion without M_dist_B_Nm.");
+end
+element = logsout.getElement("M_dist_B_Nm");
+
+torqueData = loggedSignalMatrix(element.Values.Data, 3, "M_dist_B_Nm");
+totalDisturbanceTorque = torqueData + AOCS.Environment.M_ext_B(:).';
+maxTorque = max(vecnorm(totalDisturbanceTorque, 2, 2));
+end

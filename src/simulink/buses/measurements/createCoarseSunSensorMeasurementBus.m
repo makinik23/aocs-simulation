@@ -1,6 +1,6 @@
 function CoarseSunSensorMeasurementBus = createCoarseSunSensorMeasurementBus(targetWorkspace)
 % Description:
-%   Defines coarse sun sensor measurement products consumed by downstream GNC.
+%   Defines coarse sun sensor measurement products consumed by onboard drivers.
 %
 % Arguments:
 %   targetWorkspace - Optional workspace selector. Use "base" to assign the

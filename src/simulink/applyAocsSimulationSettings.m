@@ -1,4 +1,4 @@
-function applyAocsSimulationSettings(modelName, AOCS)
+function simIn = applyAocsSimulationSettings(modelName, AOCS, simIn)
 % Description:
 %   Applies solver timing/tolerance settings and points Aerospace Blockset
 %   block mask parameters at values exposed by the validated AOCS config.
@@ -8,13 +8,18 @@ function applyAocsSimulationSettings(modelName, AOCS)
 %   AOCS - Validated configuration struct.
 %
 % Outputs:
-%   None.
+%   simIn - Updated simulation specification, or [] for an interactive edit.
 
-applySolverSettings(modelName, AOCS);
-applyAerospace6DofSettings(modelName);
-applyOrbitPropagatorSettings(modelName, AOCS);
-applySunEphemerisSettings(modelName, AOCS);
-applyEarthFrameSettings(modelName, AOCS);
-applyIgrfSettings(modelName);
-applyEclipseShadowModelSettings(modelName, AOCS);
+% With no third argument, this is an explicit interactive model edit.
+% With SimulationInput, all overrides are scoped to that simulation.
+if nargin < 3
+    simIn = [];
+end
+simIn = applySolverSettings(modelName, AOCS, simIn);
+simIn = applyAerospace6DofSettings(modelName, simIn);
+simIn = applyOrbitPropagatorSettings(modelName, AOCS, simIn);
+simIn = applySunEphemerisSettings(modelName, AOCS, simIn);
+simIn = applyEarthFrameSettings(modelName, AOCS, simIn);
+simIn = applyIgrfSettings(modelName, simIn);
+simIn = applyEclipseShadowModelSettings(modelName, AOCS, simIn);
 end

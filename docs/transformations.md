@@ -54,7 +54,7 @@ In Aerospace Blockset terminology, this inertial frame is referred to as ICRF (I
 For an Earth-centered simulation, its origin is located at the Earth's center of mass, while its axes follow the International Celestial Reference Frame orientation.
 This reference frame is called GCRF (Geocentric Celestial Reference Frame). MATLAB states that this frame may be treated as the ECI frame realized at J2000 for the purposes of spacecraft modelling.
 
-The current orbit model uses unperturbed Keplerian propagation. The spacecraft position and velocity are propagated entirely in `I`. The model therefore includes central-body gravity but does not yet include effects such as Earth oblateness, atmospheric drag, solar-radiation pressure, or third-body gravity.
+The default orbit model uses numerical propagation in `I` with EGM2008 spherical harmonics and Sun/Moon third-body gravity. The environment supplies atmospheric drag and solar-radiation-pressure accelerations. Keplerian propagation is an optional configuration; see `config/orbit_environment.json` and the scenario overrides.
 
 ## IAU-2000/2006 Reduction
 
@@ -219,11 +219,11 @@ The body-frame Sun direction is obtained using the same inertial-to-body attitud
 The default implementation uses:
 
 ```text
-src/environment/sunPositionLowPrecision.m
+src/simulink/private/applySunEphemerisSettings.m
 src/environment/computeSunProducts.m
 ```
 
-A higher-fidelity implementation may later use `planetEphemeris` or the Aerospace Blockset `Planetary Ephemeris` block. Those methods require the appropriate external JPL ephemeris data package.
+The Sun source is the Aerospace Blockset `Planetary Ephemeris` block. Its JPL ephemeris model and date interval are selected by the JSON configuration. The corresponding Aerospace ephemeris data must be installed.
 
 ## Main Implementation Files
 
@@ -234,7 +234,7 @@ config/AocsSimulationConfig.json
 src/config/loadAocsSimulationConfig.m
 src/simulink/applyAocsSimulationSettings.m
 src/simulink/buses/**/create*Bus.m
-src/environment/sunPositionLowPrecision.m
+src/simulink/private/applySunEphemerisSettings.m
 src/environment/computeSunProducts.m
 ```
 

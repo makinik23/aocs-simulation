@@ -1,0 +1,13 @@
+{
+  "gnc": {
+    "attitude_initialization": {
+      "enabled": true,
+      "magnetometer_max_age_s": 0.25,
+      "css_max_age_s": 0.25,
+      "sgp4_sample_time_s": 1.0,
+      "sgp4_bstar": 0.0,
+      "minimum_vector_norm": 1.0e-12,
+      "minimum_triad_cross_norm": 0.05
+    }
+  }
+}

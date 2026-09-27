@@ -1,7 +1,15 @@
-function raw = readAocsConfigFile(configFile)
+function raw = readAocsConfigFile(configFile, ancestors)
 %READAOCSCONFIGFILE Read JSON config and apply recursive extends overrides.
 
-configFile = string(configFile);
+if nargin < 2
+    ancestors = strings(0, 1);
+end
+configFile = string(java.io.File(char(configFile)).getCanonicalPath());
+if any(configFile == ancestors)
+    error("AOCS:Config:ExtendsCycle", "Config inheritance cycle: %s", ...
+        strjoin([ancestors; configFile], " -> "));
+end
+ancestors(end + 1, 1) = configFile;
 raw = jsondecode(fileread(configFile));
 
 if isfield(raw, "extends")
@@ -10,7 +18,7 @@ if isfield(raw, "extends")
 
     merged = struct();
     for k = 1:numel(baseFiles)
-        merged = mergeConfigStructs(merged, readAocsConfigFile(baseFiles(k)));
+        merged = mergeConfigStructs(merged, readAocsConfigFile(baseFiles(k), ancestors));
     end
 
     raw = mergeConfigStructs(merged, raw);
@@ -38,7 +46,7 @@ else
 end
 
 for k = 1:numel(files)
-    if ~isfile(files(k))
+    if ~java.io.File(char(files(k))).isAbsolute()
         files(k) = fullfile(fileparts(configFile), files(k));
     end
 

@@ -1,38 +1,42 @@
-function out = run_aocs_simulation(configFile)
-% Description:
-%   Loads the configuration, creates bus objects, configures the
-%   Aerospace Blockset 6DOF block, runs the Simulink plant, and saves the
-%   latest results to the configured results file.
-%
-% Arguments:
-%   configFile - Optional path to an AocsSimulationConfig JSON file.
-%
-% Outputs:
-%   out - Simulink.SimulationOutput returned by the plant simulation.
-
-projectRoot = setupAocsPaths();
-
-if nargin < 1 || strlength(string(configFile)) == 0
-    configFile = fullfile(projectRoot, "config", "AocsSimulationConfig.json");
+function [out, AOCS, runDirectory] = run_aocs_simulation(configFile)
+%RUN_AOCS_SIMULATION Run a scoped experiment and keep its immutable evidence.
+% The configured results file remains a convenience copy for plotting.
+% results/runs/<unique-id>/ contains the authoritative result and provenance.
+root = setupAocsPaths();
+configureAocsFileGeneration();
+if nargin < 1
+    configFile = "";
 end
-
-AOCS = setupAocsSimulation(configFile);
-
-if ~isfile(AOCS.Model.File)
-    error("Model not found: %s", char(AOCS.Model.File));
+requireDtm2020Native();
+[simIn, AOCS] = createAocsSimulationInput(configFile);
+if strcmp(get_param(AOCS.Model.Name, 'Dirty'), 'on')
+    error("AOCS:Simulation:UnsavedModel", ...
+        "Save or discard model edits before an archived run; source hashes describe files on disk.");
 end
-
-load_system(AOCS.Model.File);
-applyAocsSimulationSettings(AOCS.Model.Name, AOCS);
-
-out = sim(AOCS.Model.Name);
-
-if ~isfolder(AOCS.Results.Directory)
-    mkdir(AOCS.Results.Directory);
+runs = fullfile(AOCS.Results.Directory, 'runs');
+if ~isfolder(runs)
+    mkdir(runs);
 end
-
-save(AOCS.Results.File, "out", "AOCS");
-
-disp("Simulation finished.");
-disp("Results saved to " + AOCS.Results.File);
+runDirectory = string(tempname(runs));
+mkdir(runDirectory);
+metadata = aocsRunProvenance(root);
+metadata.ModelSHA256 = aocsFileHash(AOCS.Model.File);
+metadata.Status = "running";
+writeAocsJson(fullfile(runDirectory, 'configuration.json'), AOCS);
+writeAocsJson(fullfile(runDirectory, 'metadata.json'), metadata);
+try
+    out = sim(simIn);
+    metadata.Status = "completed";
+    metadata.CompletedUTC = string(datetime('now', TimeZone='UTC'));
+    save(fullfile(runDirectory, 'simulation.mat'), 'out', 'AOCS', 'metadata');
+    save(AOCS.Results.File, 'out', 'AOCS', 'metadata');
+catch problem
+    metadata.Status = "failed";
+    metadata.ErrorIdentifier = string(problem.identifier);
+    metadata.ErrorMessage = string(problem.message);
+    writeAocsJson(fullfile(runDirectory, 'metadata.json'), metadata);
+    rethrow(problem);
+end
+writeAocsJson(fullfile(runDirectory, 'metadata.json'), metadata);
+fprintf('Simulation evidence: %s\n', runDirectory);
 end

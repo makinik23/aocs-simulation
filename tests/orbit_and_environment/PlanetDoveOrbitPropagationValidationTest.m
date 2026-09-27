@@ -57,7 +57,7 @@ classdef PlanetDoveOrbitPropagationValidationTest < matlab.unittest.TestCase
 
             AOCS = setupAocsSimulation(configFile);
             load_system(AOCS.Model.File);
-            cleanupModel = onCleanup(@() closeModelWithoutSaving(AOCS.Model.Name)); %#ok<NASGU>
+            cleanupModel = onCleanup(@() closeModelWithoutSaving(AOCS.Model.Name));
             applyAocsSimulationSettings(AOCS.Model.Name, AOCS);
 
             block = findPlanetValidationOrbitPropagatorBlock(AOCS.Model.Name);
@@ -204,9 +204,8 @@ testCase.assumeTrue(ref.time_s(end) > 0.0, ...
 configFile = writePlanetDoveValidationConfig(testCase.ProjectRoot, ref);
 cleanupConfig = onCleanup(@() deleteIfFileExists(configFile));
 
-out = run_aocs_simulation(configFile);
-AOCS = evalin("base", "AOCS");
-cleanupModel = onCleanup(@() closeModelWithoutSaving(AOCS.Model.Name)); %#ok<NASGU>
+[out, AOCS] = run_aocs_simulation(configFile);
+cleanupModel = onCleanup(@() closeModelWithoutSaving(AOCS.Model.Name));
 data = extractFlightVisualizationData(out, AOCS);
 residuals = computeOrbitResiduals(data.Time_s, data.Orbit.r_I_m, ...
     data.Orbit.v_I_m_s, ref.time_s, ref.r_I_ref_m, ref.v_I_ref_m_s);
