@@ -456,6 +456,10 @@ initialization = requireStruct(gnc, "attitude_initialization", ...
     "gnc.attitude_initialization");
 
 config = struct();
+config.SampleTime_s = scalarField(gnc, "sample_time_s", "gnc.sample_time_s", true);
+config.MEKF = readMekfConfig(requireStruct(gnc, "mekf", "gnc.mekf"));
+config.AttitudeHealth = readAttitudeHealthConfig( ...
+    requireStruct(gnc, "attitude_health", "gnc.attitude_health"));
 config.AttitudeInitialization.Enabled = logicalScalarField(initialization, ...
     "enabled", "gnc.attitude_initialization.enabled");
 config.AttitudeInitialization.MagnetometerMaxAge_s = scalarField( ...
@@ -854,6 +858,7 @@ function config = buildGNCBusConfig(AOCS)
 
 initialization = AOCS.GNC.AttitudeInitialization;
 config = struct();
+config.sample_time_s = AOCS.GNC.SampleTime_s;
 config.AttitudeInitialization.enabled = double(initialization.Enabled);
 config.AttitudeInitialization.magnetometer_max_age_s = ...
     initialization.MagnetometerMaxAge_s;
@@ -892,6 +897,21 @@ config.AttitudeInitialization.polar_motion_rad = ...
     AOCS.Environment.EarthOrientation.PolarMotion_rad;
 config.AttitudeInitialization.d_cip_rad = ...
     AOCS.Environment.EarthOrientation.DCIP_rad;
+config.MEKF.initial_bias_B_rad_s = AOCS.GNC.MEKF.InitialBias_B_rad_s;
+config.MEKF.initial_covariance = diag([ ...
+    AOCS.GNC.MEKF.InitialAttitudeStd_rad; ...
+    AOCS.GNC.MEKF.InitialBiasStd_rad_s].^2);
+names = fieldnames(AOCS.GNC.MEKF.Tuning);
+for index = 1:numel(names)
+    config.MEKF.(names{index}) = AOCS.GNC.MEKF.Tuning.(names{index});
+end
+health = AOCS.GNC.AttitudeHealth;
+config.AttitudeHealth.degraded_attitude_std_rad = health.DegradedAttitudeStd_rad;
+config.AttitudeHealth.lost_attitude_std_rad = health.LostAttitudeStd_rad;
+config.AttitudeHealth.degraded_state_age_s = health.DegradedStateAge_s;
+config.AttitudeHealth.lost_state_age_s = health.LostStateAge_s;
+config.AttitudeHealth.degraded_correction_age_s = health.DegradedCorrectionAge_s;
+config.AttitudeHealth.lost_correction_age_s = health.LostCorrectionAge_s;
 end
 
 function value = decimalYear(epochUtc)

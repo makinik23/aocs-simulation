@@ -546,8 +546,12 @@ classdef SensorsTest < matlab.unittest.TestCase
             testCase.verifyBusInputName(busAssembly, 2, "Magnetometer");
             testCase.verifyBusInputName(busAssembly, 3, "CoarseSunSensors");
             testCase.verifyBusInputName(busAssembly, 4, "GNSS");
-            testCase.verifyInputSource(testCase.ModelName + "/GNC", 1, ...
-                testCase.ModelName + "/Drivers");
+            testCase.verifyEmpty(find_system(testCase.ModelName + "/GNC", ...
+                "SearchDepth", 1, "BlockType", "Inport"));
+            callers = find_system(testCase.ModelName + "/GNC/Sensor Access", ...
+                "SearchDepth", 1, "BlockType", "FunctionCaller");
+            testCase.verifyEqual(sort(string(get_param(callers, "Name"))), ...
+                sort(["ReadGyro"; "ReadMagnetometer"; "ReadCoarseSunSensors"; "ReadGnss"]));
             testCase.verifyInputSource(testCase.ModelName + "/Drivers", 1, ...
                 testCase.ModelName + "/Sensors");
         end
@@ -632,6 +636,23 @@ classdef SensorsTest < matlab.unittest.TestCase
             testCase.verifyEqual(out.validity.Data, ...
                 zeros(size(out.validity.Data)));
             testCase.verifyEqual(out.rate.Data, zeros(size(out.rate.Data)));
+        end
+
+        function acquisitionGyroNoiseIsIndependentAcrossAxes(testCase)
+            % Description:
+            %   Checks that the production gyro draws three independent streams.
+            % Arguments:
+            %   testCase - matlab.unittest.TestCase instance.
+            % Outputs:
+            %   None.
+            out=simulateGyroAcquisition(0.1,1,0.01,30);
+            receipt=out.receiveTime.Data(:);
+            fresh=[true;diff(receipt)>1e-10];
+            residual=signalRows(out.rate,3)-receipt*[1 2 3];
+            rho=corrcoef(residual(fresh,:));
+            rho(1:4:end)=0;
+            testCase.verifyLessThan(max(abs(rho),[],'all'),0.2);
+            testCase.verifyGreaterThan(min(std(residual(fresh,:))),0.007);
         end
 
         function acquisitionDriverWaitsForEventsAndCountsIdenticalPayloads(testCase)
@@ -849,8 +870,10 @@ testCase.verifyTrue(any(diff(out.receiveTime.Data(:)) > 0));
 testCase.verifyEqual(t, (0:0.025:0.45)', 'AbsTol', 1e-12);
 end
 
-function out = simulateGyroAcquisition(period, mode)
+function out = simulateGyroAcquisition(period, mode, noiseStd, stopTime)
 % Copy the production gyro into a transient model; do not modify the plant.
+if nargin<3, noiseStd=0; end
+if nargin<4, stopTime=0.45; end
 setupAocsSimulation;
 load_system(fullfile(projectRoot(), 'models', 'aocs_plant.slx'));
 model = 'SensorsTestGyroHarness';
@@ -858,7 +881,7 @@ new_system(model);
 cleanup = onCleanup(@() close_system(model, 0));
 plantCleanup = onCleanup(@() close_system('aocs_plant', 0));
 set_param(model, 'SolverType', 'Fixed-step', 'Solver', 'ode4', ...
-    'FixedStep', '0.025', 'StopTime', '0.45', ...
+    'FixedStep', '0.025', 'StopTime', num2str(stopTime,17), ...
     'ReturnWorkspaceOutputs', 'on');
 add_block('aocs_plant/Sensors/Gyro', [model '/Gyro']);
 add_block('simulink/Sources/Clock', [model '/Clock']);
@@ -904,7 +927,8 @@ config.Value.Gyro.mode_id = mode;
 config.Value.Gyro.enabled = 1;
 config.Value.Gyro.bias_initial_rad_s = zeros(3,1);
 config.Value.Gyro.bias_random_walk_step_std_rad_s = 0;
-config.Value.Gyro.noise_std_rad_s = 0;
+config.Value.Gyro.noise_std_rad_s = noiseStd;
+config.Value.Gyro.range_rad_s = 1000;
 config.Value.Gyro.resolution_rad_s = 1e-9;
 config.Value.Gyro.failure_valid = 0;
 config.Value.Gyro.failure_output_rad_s = zeros(3,1);

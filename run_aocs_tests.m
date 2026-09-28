@@ -22,6 +22,7 @@ if profile == "core"
     for file = files
         suite = [suite, TestSuite.fromFile(fullfile(root, 'tests', 'environment', file + '.m'))]; %#ok<AGROW>
     end
+    suite = suite.selectIf(~matlab.unittest.selectors.HasTag("FullPlant"));
 else
     requireDtm2020Native();
     if profile == "validation" && ~isfile(fullfile(root, 'validation', 'planet', ...

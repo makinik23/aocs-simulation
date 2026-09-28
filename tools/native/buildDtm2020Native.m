@@ -56,7 +56,8 @@ if ismac
 else
     libraryName = "libaocs_dtm2020.so";
     sharedFlags = "-shared -Wl,-soname," + libraryName;
-    loaderFlags = "LDFLAGS=$LDFLAGS -Wl,-rpath,'$$ORIGIN'";
+    % MEX passes LDFLAGS through a shell; keep $ORIGIN literal for the ELF loader.
+    loaderFlags = 'LDFLAGS=$LDFLAGS -Wl,-rpath,\$ORIGIN';
 end
 nativeLibrary = fullfile(buildRoot, libraryName);
 compileCommand = strjoin([ ...

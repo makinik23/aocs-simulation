@@ -281,8 +281,8 @@ end
 
 load_system(AOCS.Model.File);
 applyAocsSimulationSettings(AOCS.Model.Name, AOCS);
-sltest.harness.open(owner, harnessName);
 cleanup = onCleanup(@() closeHarnessAndModel(owner, harnessName, AOCS.Model.Name));
+sltest.harness.open(owner, harnessName);
 
 inputDataset = swarmHarnessInputDataset(data, swarmR_I_m, AOCS);
 simIn = Simulink.SimulationInput(harnessName);

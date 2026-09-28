@@ -2,21 +2,25 @@
 
 ## Requirements
 
-Baseline: MATLAB R2025a, Simulink, Aerospace Blockset and Aerospace Toolbox.
-The full plant also needs the Aerospace ephemeris datasets used by its selected
-JPL model, GNU Fortran (`gfortran` on PATH), a MATLAB-supported C MEX compiler and
-Git. `aocsDoctor` reports installed products, native build readiness and optional
-Planet fixture availability; it does not install toolboxes or provide licenses.
+Baseline: MATLAB R2025a, Simulink, Aerospace Blockset, Aerospace Toolbox and
+DSP System Toolbox (native Cholesky solve in the MEKF).
+The full plant also needs the Ephemeris Data for Aerospace Toolbox support
+package for its selected JPL model, GNU Fortran (`gfortran` on PATH), a
+MATLAB-supported C MEX compiler and Git. The full test suite additionally
+requires Simulink Test for its component harnesses. `aocsDoctor` reports
+installed products, native build readiness and optional Planet fixture
+availability; it does not install toolboxes or provide licenses.
 
 | Platform | Core/config/sensor path | Native full plant |
 |---|---|---|
 | macOS Apple silicon | Locally verified on R2025a | Locally verified with GNU Fortran and explicit CLT fallback |
 | macOS Intel | Portable code; not locally executed | Build branch provided; not validated |
-| Linux x86-64 | CI job configured; not locally executed | GNU shared-library build and CI job provided; not yet validated here |
-| Windows x86-64 | CI job configured; not locally executed | Explicitly unsupported in this increment; no silent atmosphere substitution |
+| Linux x86-64 | Covered by the full CI suite; not locally executed | GNU shared-library build and CI job provided; not yet validated here |
+| Windows x86-64 | Portable code; no CI job | Explicitly unsupported in this increment; no silent atmosphere substitution |
 
 This matrix deliberately distinguishes a portable implementation from tested
-platform support. MATLAB licenses/products are required on every platform.
+platform support. CI runs the full suite on Linux; MATLAB licenses/products are
+required on every platform.
 
 ## After cloning
 
@@ -35,7 +39,8 @@ bootstrapAocs("core")
 run_aocs_tests("core")
 ```
 
-This is the first check on a new machine and does not require Fortran or DTM2020.
+This is the first check on a new machine and does not require Fortran, DTM2020
+or the ephemeris support package. Full-plant tests run in the `full` profile.
 The project does not modify your global MATLAB startup or save the MATLAB path.
 Project startup, bootstrap, and the simulation/test entry points direct generated
 Simulink cache and code to `build/simulink/cache/` and `build/simulink/codegen/`.
@@ -54,6 +59,7 @@ bootstrapAocs("full")
 run_aocs_tests("full")
 [out, config, runDirectory] = run_aocs_simulation;
 plot_attitude_results
+plot_attitude_estimation_results
 plot_orbit_environment_results
 ```
 
@@ -96,7 +102,8 @@ missing cases as skipped. Long orbit arcs require explicit opt-in.
 ## Troubleshooting
 
 - Missing product: install/license the required MathWorks product; core tests still
-  require Simulink and the Aerospace products used by configuration/wiring checks.
+  require Simulink, the Aerospace products used by configuration/wiring checks,
+  and DSP System Toolbox for the MEKF matrix solver.
 - Missing or stale native backend: run full bootstrap; do not copy another
   platform's MEX files into the checkout.
 - `gfortran` absent from PATH: ensure the process launching MATLAB inherits its path.

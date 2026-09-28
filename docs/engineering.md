@@ -1,11 +1,9 @@
 # Engineering baseline
 
-This is a simulation and algorithm-development project, not qualified flight
-software. The current baseline contains truth dynamics, four sensor models and
+The current baseline contains truth dynamics, four sensor models and
 onboard acquisition, an independent onboard SGP4 orbit reference, inertial Sun and
-magnetic references, and TRIAD attitude initialization. The six-state MEKF is the
-next increment. Do not claim flight
-qualification, flight-code coverage or complete MAB compliance from these tests.
+magnetic references, TRIAD attitude initialization and six-state MEKF attitude/
+gyro-bias estimation.
 
 ## Model/data ownership
 
@@ -50,7 +48,7 @@ Advisor MAB check set.
 | Clear hierarchy and left-to-right flow | Top-level four-layer architecture; hand-controlled layout in `styleAocsModel`, exported diagrams reviewed visually |
 | Readable block names and diagrams | Meaningful subsystem/port names, black on white, no illegible subsystem previews at the reviewed architecture, Sensors and Drivers levels |
 | Orthogonal signal lines | Explicit routing on the architecture and driver diagrams; physics internals are preserved |
-| Explicit unused signals (MAB db_0081) | TRIAD initialization ends in a named Terminator until the MEKF is added; `checkAocsModel` rejects unconnected project-owned data ports |
+| Explicit unused signals (MAB db_0081) | TRIAD seeds MEKF; the estimate ends in a named Terminator until a controller consumes it; `checkAocsModel` rejects unconnected project-owned data ports |
 | No accidental dangling wiring | Unconnected input/output/line diagnostics set to `error`; model compilation checks actual wiring |
 | Numerical failures visible | An enabled assertion checks every numeric `PlantStateBus` leaf for finiteness; NaN/Inf injection tests verify failure; integer sequence wrap is intentional |
 | Defined interfaces | Typed buses, explicit SI units/frames in contracts; raw measurements separated from driver metadata |
@@ -101,7 +99,7 @@ Skipped tests remain visible and never count as passes.
 Planet OEM is a **predicted ephemeris comparison**, not independent reconstructed
 truth or a measured orbit-accuracy certification. Its current thresholds are
 loose regression guardrails, not demonstrated accuracy or a mission error budget.
-Actual residuals must accompany the thresholds; see [local verification](verification.md).
+Actual residuals must accompany the thresholds in any reported validation result.
 Sentinel/Swarm reference provenance lives in their `validation/` directories.
 
 ## Evidence for a simulation
@@ -127,7 +125,7 @@ These definitions are not evidence of successful remote runs until CI executes.
 The workflow uses official [MATLAB Actions](https://github.com/matlab-actions/setup-matlab);
 private repositories require an appropriate `MLM_LICENSE_TOKEN` repository secret.
 
-Future increments: six-state MEKF attitude-error/gyro-bias estimation, GNSS-aided
+Future increments: MEKF stochastic consistency and timing qualification, GNSS-aided
 orbit estimation, Windows native toolchain validation, full
 MAB/Model Advisor review for the controller, hardware transport delay/loss, B-dot
 detumbling and a closed-loop performance requirement with an explicit initial-rate

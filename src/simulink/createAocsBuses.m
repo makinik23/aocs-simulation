@@ -5,11 +5,14 @@ createOrbitConfigBus("base");
 createEnvironmentConfigBus("base");
 createSgp4ConfigBus("base");
 createAttitudeInitializationConfigBus("base");
+createAttitudeHealthConfigBus("base");
 createGNCConfigBus("base");
 createAttitudeStateBus("base");
 createOrbitStateBus("base");
 createReferenceVectorBus("base");
 createAttitudeInitializationBus("base");
+createAttitudeEstimateBus("base");
+createAttitudeHealthBus("base");
 createEnvironmentContextBus("base");
 createAtmosphereBus("base");
 createMagneticFieldBus("base");
@@ -30,5 +33,6 @@ createCoarseSunSensorMeasurementBus("base");
 createGnssMeasurementBus("base");
 createSensorMeasurementBus("base");
 createSensorReportBus("base");
+createSensorReadStatusBus("base");
 
 end

@@ -37,6 +37,7 @@ if includeTests
         paths
         fullfile(rootDirectory, "tests", "helpers")
         fullfile(rootDirectory, "tests", "harnesses")
+        fullfile(rootDirectory, "tests", "gnc")
     ];
 end
 

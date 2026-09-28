@@ -14,8 +14,9 @@ Flight Dynamics / PlantStateBus
   -> Sensors
   -> SensorMeasurementBus + per-sensor DataReady events
   -> Drivers
-  -> SensorReportBus
-  -> GNC
+  -> per-sensor report/status mailboxes
+  -> GNC / Sensor Access calls Read...()
+  -> SensorReportBus + SensorReadStatusBus snapshots
 ```
 
 These models are plant-side measurement generators. They represent what onboard
@@ -134,16 +135,18 @@ Each per-sensor report retains the raw measurement fields and adds:
 
 The individual report buses are `GyroReportBus`, `MagnetometerReportBus`,
 `CoarseSunSensorReportBus`, and `GnssReportBus`. Each report is a nonvirtual bus
-sampled as a unit. The top-level bus is virtual so sensors retain independent
-sample rates; combining them does not resample GNSS at the gyro rate.
+sampled as a unit. The passive Drivers output is a virtual top-level bus so
+sensors retain independent sample rates. GNC instead assembles a nonvirtual
+snapshot at its polling rate; this does not create new physical measurements.
 
 Before the first receipt, report fields are zero (`valid = 0`, `sequence_id = 0`).
 With the default zero-offset periodic events, the first receipt occurs at time
 zero and has ID 1. Resetting/restarting the simulation resets the driver state.
-The counter wraps modulo 2^32. A consumer should initialize its last-seen ID to
+The counter wraps modulo 2^32. A passive diagnostic consumer can initialize its last-seen ID to
 zero and compare IDs for **inequality**, not greater-than; update the last-seen
 ID for every new report, and use the payload only if `valid` permits it. This
 assumes fewer than 2^32 unobserved receipts and a coordinated consumer reset.
+The consuming GNC API uses driver-owned `has_data` and `new_data` flags instead.
 TRIAD now applies freshness checks to magnetometer and CSS reports before attitude
 initialization. The onboard SGP4 position reference is independent of GNSS; the
 GNSS report remains available for a future navigation filter. There is one
@@ -169,6 +172,49 @@ The saved production model contains all four sensor-driver paths. Its structure
 and block positions are maintained directly in Simulink; there is no generated
 model-builder copy that must be kept synchronized.
 
+### Consuming Sensor API
+
+All four drivers expose PascalCase Simulink Functions: `ReadGyro()`,
+`ReadMagnetometer()`, `ReadCoarseSunSensors()` and `ReadGnss()`. Each returns
+`[report, status]` and owns separate report/status Data Store Memory blocks.
+DataReady updates the mailbox. The existing report output is a non-consuming
+view for diagnostics, currently terminated at the model root.
+
+`report` uses the respective sensor report bus. `status` uses `DriverReadStatusBus`:
+
+| Flag | Meaning at the instant of the read |
+| --- | --- |
+| `has_data` | At least one report has been received since initialization. |
+| `new_data` | At least one report has arrived since the previous read. |
+| `overrun` | A report was overwritten while still unread. Latched until read. |
+
+Each read returns a snapshot and clears `new_data` and `overrun`, retaining
+the report and `has_data`. The acknowledgement depends on the status read in
+the block dataflow. Repeated reads return held data with `new_data = false`.
+Invalid and identical sensor payloads are still new receipts. Sequence wrap
+to zero does not mean that the mailbox is empty. An overrun returns the latest
+report with both `new_data` and `overrun` true; it does not discard that report.
+
+`GNC/Sensor Access` calls all four methods once per GNC tick using Function
+Callers. It assembles a `SensorReportBus` snapshot for TRIAD and the MEKF
+placeholder, plus a `SensorReadStatusBus` snapshot for the MEKF interface.
+The independent period is `AOCS_GNCConfig.sample_time_s`, default `0.1 s`.
+A Function-Call Split orders Sensor Access, TRIAD and the MEKF placeholder.
+Atomic Sensors execution at priority 10 precedes the GNC generator at priority
+20 on coincident hits; multi-rate integration tests verify actual receipt order.
+
+This is a single-consumer, latest-report mailbox. Additional algorithms use
+the Sensor Access snapshot, not another consuming call. Telemetry may inspect
+the report output. Overrun reports lost history but cannot reconstruct it;
+slower or jittering GNC execution requires a FIFO before gyro integration can
+assume contiguous samples. A future MEKF must explicitly handle `overrun`,
+invalid reports and receipt-time gaps. Embedded multitasking will also require
+an atomic snapshot/acknowledgement implementation; the current tests cover
+serialized Simulink execution, not concurrent firmware.
+
+See [Sensor Driver API and the GNC Cycle](sensor_driver_api.md) for block-by-block
+explanations, scheduling, configuration, verification and a complete flow diagram.
+
 ## Gyroscope
 
 The gyroscope uses the plant attitude state body rate:
@@ -192,6 +238,10 @@ The bias is a discrete random walk:
 ```text
 bias[k + 1] = bias[k] + bias_random_walk_step_std_rad_s * w_bias[k]
 ```
+
+Both noise sources draw separate random streams on each body axis. The scalar
+JSON seeds define the first stream; the Simulink blocks derive distinct seeds
+for the other axes.
 
 The symmetric saturation range is `+/- range_rad_s`, and quantization uses
 `resolution_rad_s`. `valid` is true only when the sensor is enabled and the
@@ -443,7 +493,7 @@ src/simulink/setupAocsSimulation.m
 
 ## Tests
 
-All sensor tests live in `tests/sensors/SensorsTest.m`. The suite contains 23
+The sensor baseline lives in `tests/sensors/SensorsTest.m`. It contains 23
 independent tests, grouped in pipeline order with consistent method prefixes
 and MATLAB test tags:
 
@@ -456,6 +506,10 @@ and MATLAB test tags:
 | `Acquisition` | `acquisition` | Focused gyro timing, invalid reports, delayed receipt, identical payloads and counter rollover | 4 |
 | `Integration` | `integration` | All sensors at independent rates, eclipse, failures, GNSS acquisition and dropout | 3 |
 
+`tests/sensors/SensorDriverApiTest.m` adds 23 cases: five API behaviors for each
+of four drivers, two multi-rate production-chain checks and GNC period validation.
+Both suites run in `core`.
+
 The acquisition tests isolate the gyro/receiver mechanism. The integration
 section checks the complete multi-sensor chain; it also covers the CSS eclipse
 transition. Tests do not depend on execution order. Harness builders and
@@ -465,7 +519,7 @@ registered as a separate test case.
 
 ```matlab
 setupAocsPaths
-results = runtests("tests/sensors/SensorsTest.m");
+results = runtests("tests/sensors");
 assertSuccess(results);
 
 % Optional: run only one section.

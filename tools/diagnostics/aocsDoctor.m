@@ -3,7 +3,8 @@ function report = aocsDoctor()
 root = setupAocsPaths();
 installed = ver;
 products = string({installed.Name});
-required = ["MATLAB", "Simulink", "Aerospace Blockset", "Aerospace Toolbox"];
+required = ["MATLAB", "Simulink", "Aerospace Blockset", "Aerospace Toolbox", ...
+    "DSP System Toolbox"];
 report = struct("MATLAB", version, "Release", version('-release'), ...
     "Architecture", computer('arch'), "Root", root, ...
     "RequiredProducts", required, "MissingProducts", required(~ismember(required, products)));

@@ -67,6 +67,8 @@ classdef AttitudeInitializationTest < matlab.unittest.TestCase
             busConfig = AOCS.GNCConfig.AttitudeInitialization;
 
             testCase.verifyTrue(initialization.Enabled);
+            testCase.verifyEqual(AOCS.GNC.SampleTime_s, 0.1);
+            testCase.verifyEqual(AOCS.GNCConfig.sample_time_s, 0.1);
             testCase.verifyEqual(initialization.Sgp4SampleTime_s, 1.0);
             testCase.verifyEqual(initialization.Sgp4BStar, 0.0);
             testCase.verifyEqual(initialization.MagnetometerMaxAge_s, 0.25);
@@ -115,7 +117,8 @@ classdef AttitudeInitializationTest < matlab.unittest.TestCase
             testCase.verifyEqual(string({sgp4.Elements.DataType}), ...
                 repmat("double", 1, 8));
             testCase.verifyEqual(string({gnc.Elements.Name}), ...
-                "AttitudeInitialization");
+                ["sample_time_s", "AttitudeInitialization", "MEKF", ...
+                "AttitudeHealth"]);
         end
     end
 
@@ -191,7 +194,7 @@ classdef AttitudeInitializationTest < matlab.unittest.TestCase
         end
     end
 
-    methods (Test, TestTags = "Wiring")
+    methods (Test, TestTags = ["Wiring", "FullPlant"])
         function wiringKeepsReferencesIndependentFromGnssAndTruth(testCase)
             % Description:
             %   Confirms onboard references consume only configuration and
@@ -214,9 +217,7 @@ classdef AttitudeInitializationTest < matlab.unittest.TestCase
             gncInports = find_system(gnc, "SearchDepth", 1, "BlockType", "Inport");
             referenceInports = find_system(references, ...
                 "SearchDepth", 1, "BlockType", "Inport");
-            testCase.verifyNumElements(gncInports, 1);
-            testCase.verifyEqual(string(get_param(gncInports{1}, ...
-                "OutDataTypeStr")), "Bus: SensorReportBus");
+            testCase.verifyEmpty(gncInports);
             testCase.verifyNumElements(referenceInports, 1);
             testCase.verifyEqual(string(get_param(referenceInports{1}, ...
                 "OutDataTypeStr")), "Bus: AttitudeInitializationConfigBus");
@@ -266,9 +267,14 @@ classdef AttitudeInitializationTest < matlab.unittest.TestCase
             testCase.verifyEmpty(find_system(gnc, "Regexp", "on", ...
                 "Name", ".*PlantState.*"));
             testCase.verifyNumElements(find_system(estimator, ...
-                "SearchDepth", 1, "BlockType", "Inport"), 3);
-            testCase.verifyEmpty(find_system(estimator, ...
-                "SearchDepth", 1, "BlockType", "Outport"));
+                "SearchDepth", 1, "BlockType", "Inport"), 4);
+            estimateOutports = find_system(estimator, ...
+                "SearchDepth", 1, "BlockType", "Outport");
+            testCase.verifyNumElements(estimateOutports, 2);
+            testCase.verifyEqual(string(get_param(estimator + "/AttitudeEstimate", ...
+                "OutDataTypeStr")), "Bus: AttitudeEstimateBus");
+            testCase.verifyEqual(string(get_param(estimator + "/AttitudeHealth", ...
+                "OutDataTypeStr")), "Bus: AttitudeHealthBus");
 
             charts = find(sfroot, "-isa", "Stateflow.EMChart");
             paths = string(arrayfun(@(chart) chart.Path, charts, ...
