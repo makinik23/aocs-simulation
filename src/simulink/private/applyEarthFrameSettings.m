@@ -1,4 +1,4 @@
-function applyEarthFrameSettings(modelName, AOCS)
+function simIn = applyEarthFrameSettings(modelName, AOCS, simIn)
 % Description:
 %   Applies epoch and reduction settings to ECI/ECEF/LLA frame transform blocks.
 %
@@ -9,11 +9,11 @@ function applyEarthFrameSettings(modelName, AOCS)
 % Outputs:
 %   None.
 
-applyEciToLlaSettings(modelName, AOCS);
-applyEciToEcefDcmSettings(modelName, AOCS);
+simIn = applyEciToLlaSettings(modelName, AOCS, simIn);
+simIn = applyEciToEcefDcmSettings(modelName, AOCS, simIn);
 end
 
-function applyEciToLlaSettings(modelName, AOCS)
+function simIn = applyEciToLlaSettings(modelName, AOCS, simIn)
 % Description:
 %   Finds ECI Position to LLA blocks and applies the JSON epoch as mask date
 %   plus a seconds time-increment port.
@@ -27,7 +27,7 @@ epoch = AOCS.Epoch.Utc;
 monthName = monthNumberToName(epoch(2));
 
 for k = 1:numel(blocks)
-    set_param(blocks{k}, ...
+    simIn = setAocsParameters(simIn, blocks{k}, ...
         "red", "IAU-2000/2006", ...
         "year", integerString(epoch(1)), ...
         "month", monthName, ...
@@ -43,7 +43,7 @@ for k = 1:numel(blocks)
 end
 end
 
-function applyEciToEcefDcmSettings(modelName, AOCS)
+function simIn = applyEciToEcefDcmSettings(modelName, AOCS, simIn)
 % Description:
 %   Finds standalone Direction Cosine Matrix ECI to ECEF blocks and applies
 %   the JSON epoch as mask date plus a seconds time-increment port.
@@ -61,7 +61,7 @@ for k = 1:numel(blocks)
         continue;
     end
 
-    set_param(blocks{k}, ...
+    simIn = setAocsParameters(simIn, blocks{k}, ...
         "red", "IAU-2000/2006", ...
         "year", integerString(epoch(1)), ...
         "month", monthName, ...

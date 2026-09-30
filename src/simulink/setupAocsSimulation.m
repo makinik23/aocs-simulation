@@ -1,4 +1,4 @@
-function AOCS = setupAocsSimulation(configFile)
+function [AOCS, variables] = setupAocsSimulation(configFile, publishConfiguration)
 % Description:
 %   Creates bus objects in the base workspace, wraps numeric config
 %   payloads in Simulink.Parameters, and assigns AOCS plus config parameters
@@ -10,6 +10,10 @@ function AOCS = setupAocsSimulation(configFile)
 % Outputs:
 %   AOCS - Validated configuration struct returned by loadAocsSimulationConfig.
 
+if nargin < 2
+    publishConfiguration = true;
+end
+
 projectRoot = fileparts(fileparts(fileparts(mfilename("fullpath"))));
 if nargin < 1 || strlength(string(configFile)) == 0
     configFile = fullfile(projectRoot, "config", "AocsSimulationConfig.json");
@@ -20,41 +24,15 @@ setupAocsPaths(projectRoot);
 
 nativeBuildDirectory = fullfile(projectRoot, "build", "native", ...
     "dtm2020", computer("arch"));
-nativeSFunction = fullfile(nativeBuildDirectory, "dtm2020_sfun." + mexext);
-if ~isfile(nativeSFunction)
-    addpath(fullfile(projectRoot, "tools"));
-    nativeArtifacts = buildDtm2020Native();
-    nativeBuildDirectory = nativeArtifacts.BuildDirectory;
+% Initialization never downloads dependencies or invokes compilers.
+if isfolder(nativeBuildDirectory)
+    addpath(nativeBuildDirectory);
 end
-addpath(nativeBuildDirectory);
 AOCS_DTM2020_CoefficientFile = char(fullfile(projectRoot, "third_party", ...
     "dtm2020", "upstream", "data", "DTM_2020_F107_Kp.dat"));
 
 AOCS = loadAocsSimulationConfig(configFile, projectRoot);
-createConfigBus("base");
-createOrbitConfigBus("base");
-createEnvironmentConfigBus("base");
-createAttitudeStateBus("base");
-createOrbitStateBus("base");
-createEnvironmentContextBus("base");
-createAtmosphereBus("base");
-createMagneticFieldBus("base");
-createSunBus("base");
-createIlluminationBus("base");
-createSrpBus("base");
-createDisturbanceBus("base");
-createEnvironmentBus("base");
-createPlantStateBus("base");
-createGyroConfigBus("base");
-createMagnetometerConfigBus("base");
-createCoarseSunSensorConfigBus("base");
-createGnssConfigBus("base");
-createSensorConfigBus("base");
-createGyroMeasurementBus("base");
-createMagnetometerMeasurementBus("base");
-createCoarseSunSensorMeasurementBus("base");
-createGnssMeasurementBus("base");
-createSensorMeasurementBus("base");
+createAocsBuses();
 
 AOCS_Config = Simulink.Parameter(AOCS.Config);
 AOCS_Config.DataType = "Bus: ConfigBus";
@@ -76,10 +54,21 @@ AOCS_SensorConfig.DataType = "Bus: SensorConfigBus";
 AOCS_SensorConfig.CoderInfo.StorageClass = "Auto";
 AOCS_SensorConfig.Description = "AOCS sensor configuration loaded from JSON";
 
-assignin("base", "AOCS", AOCS);
-assignin("base", "AOCS_Config", AOCS_Config);
-assignin("base", "AOCS_OrbitConfig", AOCS_OrbitConfig);
-assignin("base", "AOCS_EnvironmentConfig", AOCS_EnvironmentConfig);
-assignin("base", "AOCS_SensorConfig", AOCS_SensorConfig);
-assignin("base", "AOCS_DTM2020_CoefficientFile", AOCS_DTM2020_CoefficientFile);
+AOCS_GNCConfig = Simulink.Parameter(AOCS.GNCConfig);
+AOCS_GNCConfig.DataType = "Bus: GNCConfigBus";
+AOCS_GNCConfig.CoderInfo.StorageClass = "Auto";
+AOCS_GNCConfig.Description = "AOCS onboard GNC configuration loaded from JSON";
+
+variables = struct("AOCS", AOCS, "AOCS_Config", AOCS_Config, ...
+    "AOCS_OrbitConfig", AOCS_OrbitConfig, ...
+    "AOCS_EnvironmentConfig", AOCS_EnvironmentConfig, ...
+    "AOCS_SensorConfig", AOCS_SensorConfig, ...
+    "AOCS_GNCConfig", AOCS_GNCConfig, ...
+    "AOCS_DTM2020_CoefficientFile", AOCS_DTM2020_CoefficientFile);
+if publishConfiguration
+    names = fieldnames(variables);
+    for k = 1:numel(names)
+        assignin("base", names{k}, variables.(names{k}));
+    end
+end
 end

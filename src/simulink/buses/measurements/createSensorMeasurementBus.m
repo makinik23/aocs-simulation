@@ -1,6 +1,6 @@
 function SensorMeasurementBus = createSensorMeasurementBus(targetWorkspace)
 % Description:
-%   Defines the top-level sensor measurement contract consumed by GNC.
+%   Defines the top-level sensor measurement contract consumed by onboard drivers.
 %
 % Arguments:
 %   targetWorkspace - Optional workspace selector. Use "base" to assign the

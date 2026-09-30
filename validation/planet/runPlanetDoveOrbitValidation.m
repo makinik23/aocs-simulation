@@ -31,9 +31,8 @@ ref = trimPlanetReference(ref, duration_s);
 configFile = writePlanetDoveValidationConfig(rootDirectory, ref);
 cleanupConfig = onCleanup(@() deleteIfFileExists(configFile));
 
-out = run_aocs_simulation(configFile);
-AOCS = evalin("base", "AOCS");
-cleanupModel = onCleanup(@() closeModelWithoutSaving(AOCS.Model.Name)); %#ok<NASGU>
+[out, AOCS] = run_aocs_simulation(configFile);
+cleanupModel = onCleanup(@() closeModelWithoutSaving(AOCS.Model.Name));
 
 data = extractFlightVisualizationData(out, AOCS);
 residuals = computeOrbitResiduals(data.Time_s, data.Orbit.r_I_m, ...

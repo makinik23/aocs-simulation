@@ -1,6 +1,6 @@
 function GnssMeasurementBus = createGnssMeasurementBus(targetWorkspace)
 % Description:
-%   Defines GNSS position and velocity measurement products consumed by GNC.
+%   Defines GNSS position and velocity measurement products consumed by onboard drivers.
 %
 % Arguments:
 %   targetWorkspace - Optional workspace selector. Use "base" to assign the

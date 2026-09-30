@@ -25,6 +25,11 @@ test-results/
 
 .DS_Store
 ._*
+/venv/
+.venv/
+
+# Personal MEKF construction notes, superseded by docs/state_estimation.md
+/docs/mekf_build_01_initialization.md
 
 esa_swarm/
 /third_party/dtm2020/upstream/
@@ -44,4 +49,4 @@ results/basilisk/
 **/*_vizard.bin
 export_basilisk_visualization.m
 src/analysis/exportBasiliskDataFile.m
-tools/create_vizard_message_file.py
+tools/visualization/create_vizard_message_file.py

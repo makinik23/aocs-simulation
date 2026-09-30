@@ -1,50 +1,63 @@
 # AOCS Simulator
 Attitude and Orbit Control System simulation environment in MATLAB/Simulink. It ties
-together flight dynamics simulation and GNC algorithms.
+together flight dynamics simulation and GNC algorithms for a 3U CubeSat.
 
 ## Flight dynamics
-
-For now, the spacecraft of interest is a simple CubeSat 3U.
 
 - High precision orbit propagator:
     - EGM2008 gravity model.
     - IGRF14 magnetic field model.
-    - Sun and Moon third body gravity.
-    - Aerodynamic drag based on DTM2020 atmosphere and Sentman free-molecular flow equations.
-    - A lumped constant-area SRP model with Earth–Moon dual-cone eclipse shadowing.
-    - Gravity gradient and residual magnetic moment.
+    - Sun and Moon third-body gravity.
+    - Aerodynamic drag based on DTM2020 and Sentman free-molecular flow.
+    - Lumped constant-area SRP with Earth-Moon dual-cone eclipse shadowing.
 - Rotational dynamics:
     - I * omega_dot = M_total - omega × (I * omega)
     - q_dot = 0.5 * Omega(omega) * q
 
-    where:
-
-     - M_total = M_external + M_gravity_gradient + M_residual_magnetic + M_SRP + M_aerodynamic
+    External torques include gravity gradient, residual magnetic moment, SRP
+    and aerodynamics.
 - Configuration scenarios for repeatable mission cases and disturbance studies.
-- Model validation against external flight/reference data: Sentinel-1A POD for ECI/ECEF transformations,
-  Swarm A MAG/VirES for geomagnetic field output, and Planet Dove 3U OEM data for orbit propagation.
+
+## Sensors and GNC
+
+- Gyroscope, magnetometer, coarse Sun sensors and GNSS produce typed measurements.
+  Drivers retain the latest received report and acquisition status for each sensor.
+- An onboard SGP4 propagator, independent of GNSS, supplies orbit information for
+  Sun and magnetic reference vectors.
+- TRIAD initializes attitude from those references and sensor observations.
+  A six-state MEKF then estimates attitude and gyroscope bias using gyro prediction
+  and gated magnetic/Sun-vector updates. GNSS navigation filtering is future work.
+
 
 ## Run
 
+Requires MATLAB R2025a, Simulink, Aerospace Blockset, Aerospace Toolbox and DSP
+System Toolbox. Open the MATLAB Project or run from the repository root:
+
 ```matlab
-run_aocs_simulation
+bootstrapAocs("core")
+run_aocs_tests("core")
+```
+
+For the complete plant, configure a supported C MEX compiler and GNU Fortran:
+
+```matlab
+bootstrapAocs("full")
+[out, config, runDirectory] = run_aocs_simulation;
 plot_attitude_results
+plot_attitude_estimation_results
 plot_orbit_environment_results
 ```
 
-Clean generated MATLAB/Simulink artifacts without removing local dependencies:
+Scenario example:
 
 ```matlab
-setupAocsPaths
-cleanAocsArtifacts
-```
-
-Scenario examples:
-
-```matlab
-run_aocs_simulation("config/scenarios/high_precision.json")
 run_aocs_simulation("config/scenarios/no_disturbance_torques.json")
 ```
+
+Generated files and reports remain local in `build/`, `results/` and
+`test-results/`. See [getting started](docs/getting_started.md) for native
+dependencies, platform support and troubleshooting.
 
 ## Configuration
 
@@ -56,52 +69,37 @@ config/spacecraft_geometry.json
 config/orbit_environment.json
 config/dynamics.json
 config/sensors.json
+config/gnc.json
 ```
 
 Scenarios in `config/scenarios/` override only what changes between experiments.
-The default plant uses numerical high-precision propagation with all environment options (mentioned in Flight Dynamics Section) enabled.
 
 ## DTM2020 Setup
 
-```bash
-git clone https://github.com/swami-h2020-eu/mcm.git \
-    third_party/dtm2020/upstream
-git -C third_party/dtm2020/upstream checkout \
-    a488a7c9d030bfbe86e88ab3d28a7ec5589b92e0
-```
-
-```matlab
-addpath("tools")
-buildDtm2020Native
-run_aocs_simulation
-```
+`bootstrapAocs("full")` obtains the pinned DTM2020 source when needed and builds
+the native library locally. It does not overwrite an existing modified checkout.
+See [getting started](docs/getting_started.md) for compiler setup and the explicit
+Apple-silicon Command Line Tools fallback.
 
 ## Tests
 
-Model validation is based on dedicated Simulink harnesses and real flight data. The
-ECI/ECEF transformation harness is checked against Sentinel-1A precise orbit
-products with an independent ERFA/SOFA reference.
-The geomagnetic environment harness is checked against Swarm A MAG Level-1B data
-from VirES, including the onboard magnetic-field measurements and VirES IGRF
-reference.
-Orbit propagation is also checked end-to-end against Planet Dove 3U OEM ephemeris
-data. The validation initializes the plant from the OEM Cartesian state and
-compares propagated ECI position/velocity residuals over a short default arc.
-Longer one-orbit and 24h Planet Dove checks are opt-in with
-`AOCS_RUN_LONG_EXTERNAL_VALIDATION=1`.
+The core suite covers sensor and driver contracts, onboard references, TRIAD,
+MEKF propagation and correction, seeded Monte Carlo trials, and infrastructure.
+The full suite also includes plant and environment checks:
 
 ```matlab
-runtests("tests/transformations")
-runtests("tests/orbit_and_environment/SwarmMagneticValidationTest.m")
-runtests("tests/orbit_and_environment/PlanetDoveOrbitPropagationValidationTest.m")
-runtests("tests/environment")
+run_aocs_tests("core")
+run_aocs_tests("full")
 ```
 
-Validation data and download/reference-generation scripts live in `validation/`.
-Harness models live in `tests/harnesses/`.
+External validation uses Sentinel-1A precise orbit products for ECI/ECEF
+transformations, Swarm A magnetic-field data and optional Planet Dove 3U
+**predicted** OEM states for orbit propagation. Longer Planet Dove arcs require
+explicit opt-in. Missing optional cases are skipped, not passed.
 
+Validation data and harnesses live in `validation/` and `tests/harnesses/`.
 More detail:
-[Frame transformations](docs/transformations.md) and
-[Sun, eclipse, and SRP modeling](docs/sun_environment_modeling.md), plus the
-[atmosphere modeling contract](docs/atmosphere_modeling.md) and
-[sensor modeling contract](docs/sensors.md).
+[frame transformations](docs/transformations.md),
+[Sun, eclipse and SRP modeling](docs/sun_environment_modeling.md),
+[atmosphere modeling](docs/atmosphere_modeling.md) and
+[sensor modeling](docs/sensors.md).

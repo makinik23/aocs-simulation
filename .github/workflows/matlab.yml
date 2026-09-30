@@ -1,0 +1,31 @@
+name: MATLAB verification
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-22.04
+    env:
+      MLM_LICENSE_TOKEN: ${{ secrets.MLM_LICENSE_TOKEN }}
+    steps:
+      - uses: actions/checkout@v6
+      - run: sudo apt-get update && sudo apt-get install -y gfortran
+      - uses: matlab-actions/setup-matlab@v3
+        with:
+          release: R2025a
+          products: Simulink Simulink_Test Aerospace_Blockset Aerospace_Toolbox DSP_System_Toolbox Ephemeris_Data_for_Aerospace_Toolbox
+      - uses: matlab-actions/run-command@v3
+        with:
+          command: mex -setup C; bootstrapAocs("full"); run_aocs_tests("full");
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: matlab-verification
+          path: |
+            test-results/
+            build/native/dtm2020/*/build-manifest.json
+          if-no-files-found: warn

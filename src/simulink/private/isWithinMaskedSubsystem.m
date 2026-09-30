@@ -14,15 +14,11 @@ function tf = isWithinMaskedSubsystem(block, maskType)
 tf = false;
 parent = get_param(block, "Parent");
 
-while strlength(string(parent)) > 0
-    try
-        if string(get_param(parent, "MaskType")) == string(maskType)
-            tf = true;
-            return;
-        end
-        parent = get_param(parent, "Parent");
-    catch
+while strlength(string(parent)) > 0 && string(parent) ~= string(bdroot(block))
+    if string(get_param(parent, "MaskType")) == string(maskType)
+        tf = true;
         return;
     end
+    parent = get_param(parent, "Parent");
 end
 end

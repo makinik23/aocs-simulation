@@ -1,6 +1,6 @@
 function GyroMeasurementBus = createGyroMeasurementBus(targetWorkspace)
 % Description:
-%   Defines gyroscope measurement products consumed by downstream GNC.
+%   Defines gyroscope measurement products consumed by onboard drivers.
 %
 % Arguments:
 %   targetWorkspace - Optional workspace selector. Use "base" to assign the

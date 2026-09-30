@@ -1,0 +1,35 @@
+{
+  "gnc": {
+    "sample_time_s": 0.1,
+    "mekf": {
+      "initial_bias_B_rad_s": [0.0, 0.0, 0.0],
+      "initial_attitude_std_deg": [5.0, 5.0, 5.0],
+      "initial_bias_std_deg_s": [0.1, 0.1, 0.1],
+      "gyro_noise_density_rad_s_sqrt_Hz": 8.726646259971648e-5,
+      "bias_random_walk_std_rad_s_sqrt_s": 1e-6,
+      "magnetometer_direction_std_deg": 1.5,
+      "css_direction_std_deg": 0.2,
+      "innovation_gate_squared": 25.0,
+      "maximum_correction_deg": 20.0,
+      "time_alignment_tolerance_s": 1e-6,
+      "reference_max_age_s": 2.0
+    },
+    "attitude_health": {
+      "degraded_attitude_std_deg": 2.0,
+      "lost_attitude_std_deg": 10.0,
+      "degraded_state_age_s": 0.2,
+      "lost_state_age_s": 1.0,
+      "degraded_correction_age_s": 5.0,
+      "lost_correction_age_s": 30.0
+    },
+    "attitude_initialization": {
+      "enabled": true,
+      "magnetometer_max_age_s": 0.25,
+      "css_max_age_s": 0.25,
+      "sgp4_sample_time_s": 1.0,
+      "sgp4_bstar": 0.0,
+      "minimum_vector_norm": 1.0e-12,
+      "minimum_triad_cross_norm": 0.05
+    }
+  }
+}

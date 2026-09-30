@@ -46,6 +46,7 @@ spacecraftGeometry = requireStruct(spacecraft, "geometry", "spacecraft.geometry"
 aerodynamics = requireStruct(spacecraft, "aerodynamics", "spacecraft.aerodynamics");
 massProps = requireStruct(spacecraft, "mass_properties", "spacecraft.mass_properties");
 sensors = requireStruct(raw, "sensors", "sensors");
+gnc = requireStruct(raw, "gnc", "gnc");
 initial = requireStruct(raw, "initial_conditions", "initial_conditions");
 environment = requireStruct(raw, "environment", "environment");
 disturbances = requireStruct(environment, "disturbances", "environment.disturbances");
@@ -124,6 +125,7 @@ srpConfig = readSrpConfig(srp);
 srpConfig.Enabled = disturbancesEnabled && srpConfig.Enabled;
 eclipseConfig = readEclipseConfig(eclipse);
 sensorsConfig = readSensorsConfig(sensors);
+gncConfig = readGNCConfig(gnc);
 
 if ~disturbancesEnabled
     M_ext_B = zeros(3, 1);
@@ -177,6 +179,7 @@ AOCS.Spacecraft.Mass_kg = mass_kg;
 AOCS.Spacecraft.I_B = I_B;
 AOCS.Spacecraft.Aerodynamics = aerodynamicsConfig;
 AOCS.Sensors = sensorsConfig;
+AOCS.GNC = gncConfig;
 
 AOCS.Initial.q_BI = q_BI;
 AOCS.Initial.euler_BI_0_rad = euler_BI_0_rad;
@@ -206,6 +209,7 @@ AOCS.Config = buildBusConfig(AOCS);
 AOCS.OrbitConfig = buildOrbitBusConfig(AOCS);
 AOCS.EnvironmentConfig = buildEnvironmentBusConfig(AOCS);
 AOCS.SensorConfig = buildSensorBusConfig(AOCS);
+AOCS.GNCConfig = buildGNCBusConfig(AOCS);
 AOCS.Raw = raw;
 end
 
@@ -436,6 +440,48 @@ config.Magnetometer = readMagnetometerConfig(requireStruct(sensors, ...
 config.CoarseSunSensors = readCoarseSunSensorsConfig(requireStruct(sensors, ...
     "coarse_sun_sensors", "sensors.coarse_sun_sensors"));
 config.GNSS = readGnssConfig(requireStruct(sensors, "gnss", "sensors.gnss"));
+end
+
+function config = readGNCConfig(gnc)
+% Description:
+%   Validates onboard GNC settings without borrowing plant truth values.
+%
+% Arguments:
+%   gnc - JSON object from gnc.
+%
+% Outputs:
+%   config - Struct containing normalized onboard GNC settings.
+
+initialization = requireStruct(gnc, "attitude_initialization", ...
+    "gnc.attitude_initialization");
+
+config = struct();
+config.SampleTime_s = scalarField(gnc, "sample_time_s", "gnc.sample_time_s", true);
+config.MEKF = readMekfConfig(requireStruct(gnc, "mekf", "gnc.mekf"));
+config.AttitudeHealth = readAttitudeHealthConfig( ...
+    requireStruct(gnc, "attitude_health", "gnc.attitude_health"));
+config.AttitudeInitialization.Enabled = logicalScalarField(initialization, ...
+    "enabled", "gnc.attitude_initialization.enabled");
+config.AttitudeInitialization.MagnetometerMaxAge_s = scalarField( ...
+    initialization, "magnetometer_max_age_s", ...
+    "gnc.attitude_initialization.magnetometer_max_age_s", true);
+config.AttitudeInitialization.CssMaxAge_s = scalarField(initialization, ...
+    "css_max_age_s", "gnc.attitude_initialization.css_max_age_s", true);
+config.AttitudeInitialization.Sgp4SampleTime_s = scalarField(initialization, ...
+    "sgp4_sample_time_s", "gnc.attitude_initialization.sgp4_sample_time_s", true);
+config.AttitudeInitialization.Sgp4BStar = nonnegativeScalarField(initialization, ...
+    "sgp4_bstar", "gnc.attitude_initialization.sgp4_bstar");
+config.AttitudeInitialization.MinimumVectorNorm = scalarField( ...
+    initialization, "minimum_vector_norm", ...
+    "gnc.attitude_initialization.minimum_vector_norm", true);
+config.AttitudeInitialization.MinimumTriadCrossNorm = scalarField( ...
+    initialization, "minimum_triad_cross_norm", ...
+    "gnc.attitude_initialization.minimum_triad_cross_norm", true);
+
+if config.AttitudeInitialization.MinimumTriadCrossNorm > 1.0
+    error("AOCS:Config:InvalidField", ...
+        "gnc.attitude_initialization.minimum_triad_cross_norm must not exceed 1.");
+end
 end
 
 function config = readGyroConfig(gyro)
@@ -798,6 +844,85 @@ config.GNSS.dropout_seed = gnss.DropoutSeed;
 config.GNSS.failure_r_I_m = gnss.Failure.r_I_m;
 config.GNSS.failure_v_I_m_s = gnss.Failure.v_I_m_s;
 config.GNSS.failure_valid = double(gnss.Failure.Valid);
+end
+
+function config = buildGNCBusConfig(AOCS)
+% Description:
+%   Selects numeric settings intended for onboard GNC subsystems.
+%
+% Arguments:
+%   AOCS - Validated AOCS configuration struct.
+%
+% Outputs:
+%   config - Struct matching createGNCConfigBus element names.
+
+initialization = AOCS.GNC.AttitudeInitialization;
+config = struct();
+config.sample_time_s = AOCS.GNC.SampleTime_s;
+config.AttitudeInitialization.enabled = double(initialization.Enabled);
+config.AttitudeInitialization.magnetometer_max_age_s = ...
+    initialization.MagnetometerMaxAge_s;
+config.AttitudeInitialization.css_max_age_s = initialization.CssMaxAge_s;
+config.AttitudeInitialization.sgp4_sample_time_s = ...
+    initialization.Sgp4SampleTime_s;
+config.AttitudeInitialization.sgp4_bstar = initialization.Sgp4BStar;
+config.AttitudeInitialization.minimum_vector_norm = ...
+    initialization.MinimumVectorNorm;
+config.AttitudeInitialization.minimum_triad_cross_norm = ...
+    initialization.MinimumTriadCrossNorm;
+config.AttitudeInitialization.epoch_utc = AOCS.Epoch.Utc;
+config.AttitudeInitialization.epoch_utc_jd = ...
+    calendarUtcToJulianDate(AOCS.Epoch.Utc);
+config.AttitudeInitialization.epoch_tdb_jd = AOCS.Epoch.TdbJulianDate;
+config.AttitudeInitialization.epoch_decimal_year = ...
+    decimalYear(AOCS.Epoch.Utc);
+config.AttitudeInitialization.mu_m3_s2 = ...
+    AOCS.Orbit.CentralBodyConstants.mu_m3_s2;
+keplerian = AOCS.Orbit.InitialKeplerian;
+config.AttitudeInitialization.sgp4_semi_major_axis_m = ...
+    keplerian.semi_major_axis_m;
+config.AttitudeInitialization.sgp4_eccentricity = keplerian.eccentricity;
+config.AttitudeInitialization.sgp4_inclination_deg = ...
+    rad2deg(keplerian.inclination_rad);
+config.AttitudeInitialization.sgp4_raan_deg = rad2deg(keplerian.raan_rad);
+config.AttitudeInitialization.sgp4_argument_of_periapsis_deg = ...
+    rad2deg(keplerian.argument_of_periapsis_rad);
+config.AttitudeInitialization.sgp4_true_anomaly_deg = ...
+    rad2deg(keplerian.true_anomaly_rad);
+config.AttitudeInitialization.delta_at_s = ...
+    AOCS.Environment.EarthOrientation.DeltaAT_s;
+config.AttitudeInitialization.delta_ut1_s = ...
+    AOCS.Environment.EarthOrientation.DeltaUT1_s;
+config.AttitudeInitialization.polar_motion_rad = ...
+    AOCS.Environment.EarthOrientation.PolarMotion_rad;
+config.AttitudeInitialization.d_cip_rad = ...
+    AOCS.Environment.EarthOrientation.DCIP_rad;
+config.MEKF.initial_bias_B_rad_s = AOCS.GNC.MEKF.InitialBias_B_rad_s;
+config.MEKF.initial_covariance = diag([ ...
+    AOCS.GNC.MEKF.InitialAttitudeStd_rad; ...
+    AOCS.GNC.MEKF.InitialBiasStd_rad_s].^2);
+names = fieldnames(AOCS.GNC.MEKF.Tuning);
+for index = 1:numel(names)
+    config.MEKF.(names{index}) = AOCS.GNC.MEKF.Tuning.(names{index});
+end
+health = AOCS.GNC.AttitudeHealth;
+config.AttitudeHealth.degraded_attitude_std_rad = health.DegradedAttitudeStd_rad;
+config.AttitudeHealth.lost_attitude_std_rad = health.LostAttitudeStd_rad;
+config.AttitudeHealth.degraded_state_age_s = health.DegradedStateAge_s;
+config.AttitudeHealth.lost_state_age_s = health.LostStateAge_s;
+config.AttitudeHealth.degraded_correction_age_s = health.DegradedCorrectionAge_s;
+config.AttitudeHealth.lost_correction_age_s = health.LostCorrectionAge_s;
+end
+
+function value = decimalYear(epochUtc)
+% Description:
+%   Converts a UTC calendar epoch to decimal year for the onboard IGRF model.
+
+yearValue = epochUtc(1);
+yearStart = [yearValue; 1; 1; 0; 0; 0];
+nextYearStart = [yearValue + 1; 1; 1; 0; 0; 0];
+value = yearValue + (utcSerialDay(epochUtc) - utcSerialDay(yearStart)) / ...
+    (utcSerialDay(nextYearStart) - utcSerialDay(yearStart));
 end
 
 function config = readSunConfig(sun)
