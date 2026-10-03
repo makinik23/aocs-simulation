@@ -180,6 +180,7 @@ AOCS.Spacecraft.I_B = I_B;
 AOCS.Spacecraft.Aerodynamics = aerodynamicsConfig;
 AOCS.Sensors = sensorsConfig;
 AOCS.GNC = gncConfig;
+AOCS.Control = readAttitudeControlConfig(gnc);
 
 AOCS.Initial.q_BI = q_BI;
 AOCS.Initial.euler_BI_0_rad = euler_BI_0_rad;

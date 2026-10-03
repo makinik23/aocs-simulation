@@ -34,5 +34,6 @@ createGnssMeasurementBus("base");
 createSensorMeasurementBus("base");
 createSensorReportBus("base");
 createSensorReadStatusBus("base");
+createOrbitReferenceBus("base");
 
 end

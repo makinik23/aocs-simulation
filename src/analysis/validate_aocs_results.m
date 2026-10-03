@@ -34,7 +34,15 @@ state = extractAocsState(out);
 omegaData = loggedSignalMatrix(state.omega_b.Data, 3, "omega_b");
 invariants = computeAocsInvariants(omegaData, AOCS.Spacecraft.I_B);
 maxDisturbanceTorque = maxLoggedDisturbanceTorque(out, AOCS);
-isTorqueFree = maxDisturbanceTorque < 1e-14;
+maxControlTorque = 0;
+if ismember('tau_control_B_Nm',out.logsout.getElementNames)
+    control = out.logsout.get('tau_control_B_Nm').Values;
+    maxControlTorque = max(vecnorm(loggedSignalMatrix(control.Data,3,'tau_control_B_Nm'),2,2));
+elseif isfield(AOCS,'Control') && AOCS.Control.Enabled
+    error("AOCS:Validation:MissingTorqueLog", ...
+        "Enabled attitude control requires a tau_control_B_Nm log.");
+end
+isTorqueFree = maxDisturbanceTorque < 1e-14 && maxControlTorque < 1e-14;
 
 energyError = max(abs(invariants.E_rot - invariants.E_rot(1)));
 momentumError = max(abs(invariants.H_norm - invariants.H_norm(1)));
@@ -44,6 +52,7 @@ fprintf("Diagnostic source : %s.omega_b + configured I_B\n", char(state.Source))
 fprintf("Energy drift      : %.3e\n", energyError);
 fprintf("Momentum drift    : %.3e\n", momentumError);
 fprintf("Max disturbance   : %.3e N*m\n", maxDisturbanceTorque);
+fprintf("Max control torque: %.3e N*m\n", maxControlTorque);
 fprintf("\n");
 
 if isTorqueFree
@@ -59,7 +68,7 @@ if isTorqueFree
         error("AOCS:Validation:MomentumDrift", "Torque-free momentum drift exceeds the configured limit.");
     end
 else
-    disp("Nonzero modeled disturbance torque detected; conservation is reported as a diagnostic, not a pass/fail check.")
+    disp("Nonzero disturbance or control torque detected; conservation is reported as a diagnostic, not a pass/fail check.")
 end
 
 report = struct();
@@ -67,6 +76,7 @@ report.Source = state.Source;
 report.EnergyDrift = energyError;
 report.MomentumDrift = momentumError;
 report.MaxDisturbanceTorque = maxDisturbanceTorque;
+report.MaxControlTorque = maxControlTorque;
 report.TorqueFree = isTorqueFree;
 report.EnergyConserved = isTorqueFree && energyError < AOCS.Numerics.MaxAllowedEnergyDrift;
 report.MomentumConserved = isTorqueFree && momentumError < AOCS.Numerics.MaxAllowedHnormDrift;
