@@ -2,10 +2,16 @@ function [out, AOCS, runDirectory, report] = run_nadir_pointing_demo(options)
 %RUN_NADIR_POINTING_DEMO Closed-loop acquisition from a specified LVLH error.
 % Uses the complete plant, sensors, drivers, TRIAD and MEKF.
 % Example: run_nadir_pointing_demo(InitialError_deg=90, StopTime_s=600)
+% Controller="PID" selects the copied PD with integral feedback and anti-windup.
 arguments
     options.InitialError_deg (1,1) double {mustBeFinite,mustBeNonnegative} = 90
     options.StopTime_s (1,1) double {mustBeFinite,mustBePositive} = 600
     options.DisturbancesEnabled (1,1) logical = true
+    options.Controller (1,1) string {mustBeMember(options.Controller,["PD","PID"])} = "PD"
+    options.PIDGains double {mustBeFinite,mustBePositive} = []
+    options.AntiWindupTime_s double {mustBeFinite,mustBePositive} = []
+    options.InitialErrorAxis (3,1) double {mustBeFinite} = [1;1;1]
+    options.InitialRateError_deg_s (3,1) double {mustBeFinite} = zeros(3,1)
     options.MakePlots (1,1) logical = true
 end
 
@@ -27,7 +33,8 @@ r = orbit(1:3); v = orbit(4:6); h = cross(r,v);
 z = -r/norm(r); y = -h/norm(h); x = cross(y,z);
 
 qRef = dcm2quat([x';y';z']);
-axis = [1 1 1]/sqrt(3);
+assert(norm(options.InitialErrorAxis)>0,'InitialErrorAxis must be nonzero.');
+axis = options.InitialErrorAxis'/norm(options.InitialErrorAxis);
 
 qError = [cosd(options.InitialError_deg/2), ...
     axis*sind(options.InitialError_deg/2)];
@@ -37,7 +44,8 @@ omegaRef = [0;-norm(h)/dot(r,r);0];
 
 raw = base.Raw;
 raw.initial_conditions.q_BI = qInitial(:);
-raw.initial_conditions.omega_BI_B_rad_s = quat2dcm(qError)*omegaRef;
+raw.initial_conditions.omega_BI_B_rad_s = quat2dcm(qError)*omegaRef ...
+    + deg2rad(options.InitialRateError_deg_s);
 
 if isfield(raw.initial_conditions,'euler_BI_0_rad')
     raw.initial_conditions = rmfield(raw.initial_conditions,'euler_BI_0_rad');
@@ -46,10 +54,30 @@ end
 raw.simulation.start_time_s = 0;
 raw.simulation.stop_time_s = options.StopTime_s;
 raw.environment.disturbances.enabled = options.DisturbancesEnabled;
+raw.gnc.attitude_control.use_integral = options.Controller == "PID";
+
+if ~isempty(options.PIDGains)
+    assert(options.Controller=="PID" && isvector(options.PIDGains) && numel(options.PIDGains)==3, ...
+        'PIDGains must be [Kp Kd Ki] and requires Controller="PID".');
+    raw.gnc.attitude_control.pid_kp_s2 = options.PIDGains(1);
+    raw.gnc.attitude_control.pid_kd_s = options.PIDGains(2);
+    raw.gnc.attitude_control.ki_s3 = options.PIDGains(3);
+end
+
+if ~isempty(options.AntiWindupTime_s)
+    assert(isscalar(options.AntiWindupTime_s),'AntiWindupTime_s must be scalar.');
+    raw.gnc.attitude_control.anti_windup_time_s = options.AntiWindupTime_s;
+end
 
 if ~options.DisturbancesEnabled
     raw.results.file = 'aocs_nadir_pointing_no_disturbances.mat';
     raw.mission.name = 'quaternion_pd_nadir_no_disturbances';
+end
+
+if options.Controller == "PID"
+    [~,name,extension] = fileparts(raw.results.file);
+    raw.results.file = [char(name) '_pid' char(extension)];
+    raw.mission.name = [char(raw.mission.name) '_integral_feedback'];
 end
 
 % The archived configuration contains the complete resolved experiment.
