@@ -1,6 +1,6 @@
 classdef MekfInitializationTest < matlab.unittest.TestCase
 	% Description:
-	%   Exercises the saved block-only MEKF initialization and state memory.
+	%   Verifies MEKF initialization and state memory.
 
 	methods (TestClassSetup)
 		function prepareEnvironment(~)
@@ -121,9 +121,11 @@ function [out, fixture, prior, repeated] = simulateInitialization(valid)
 	add_line(model, 'Quaternion Column/1', 'TRIAD/2');
 	add_line(model, 'Split Samples/2', 'TRIAD/3');
 	add_line(model, 'Split Samples/3', 'TRIAD/4');
-	add_line(model, 'TRIAD/1', 'Estimator/1');
+	add_line(model, 'TRIAD/1', ...
+		['Estimator/' num2str(namedPort(e, 'Inport', 'AttitudeInitialization'))]);
 
 	types = {'ReferenceVectorBus', 'SensorReportBus', 'SensorReadStatusBus'};
+	ports = {'ReferenceVectors', 'SensorReports', 'SensorReadStatus'};
 	for k = 1:3
 		name = ['Unused Input ' num2str(k)];
 		variable = ['unused' num2str(k)];
@@ -131,10 +133,13 @@ function [out, fixture, prior, repeated] = simulateInitialization(valid)
 
 		add_block('simulink/Sources/Constant', [model '/' name], ...
 			'Value', variable, 'OutDataTypeStr', ['Bus: ' types{k}]);
-		add_line(model, [name '/1'], ['Estimator/' num2str(k+1)]);
+		add_line(model, [name '/1'], ...
+			['Estimator/' num2str(namedPort(e, 'Inport', ports{k}))]);
 	end
 	add_block('simulink/Sinks/Terminator', [model '/Estimate Monitor']);
-	add_line(model, 'Estimator/1', 'Estimate Monitor/1');
+	add_line(model, ...
+		['Estimator/' num2str(namedPort(e, 'Outport', 'AttitudeEstimate'))], ...
+		'Estimate Monitor/1');
 	add_block('simulink/Signal Routing/Bus Selector', [e '/Observe Estimate'], ...
 		'OutputSignals', 'q_BI,gyro_bias_B_rad_s,P_error,initialized,valid,update_time_s,omega_BI_B_rad_s');
 
@@ -152,11 +157,9 @@ function [out, fixture, prior, repeated] = simulateInitialization(valid)
 			'VariableName', names{k}, 'SaveFormat', 'Timeseries');
 		add_line(e, ['Observe Estimate/' num2str(k)], [names{k} '/1']);
 	end
-	initializer = [e '/Initialization'];
-
-	add_block('simulink/Sinks/To Workspace', [initializer '/pulse'], ...
+	add_block('simulink/Sinks/To Workspace', [e '/pulse'], ...
 		'VariableName', 'pulse', 'SaveFormat', 'Timeseries');
-	add_line(initializer, 'Initialize Once/1', 'pulse/1');
+	add_line(e, 'Diagnostics/1', 'pulse/1');
 
 	config = evalin('base', 'AOCS_GNCConfig');
 	payload = config.Value;
@@ -175,6 +178,14 @@ function [out, fixture, prior, repeated] = simulateInitialization(valid)
 
 		repeated = sim(input);
 	end
+end
+
+function index = namedPort(subsystem, blockType, name)
+	% Resolve a copied subsystem port by its interface name.
+	port = find_system(subsystem, 'SearchDepth', 1, ...
+		'BlockType', blockType, 'Name', name);
+	assert(numel(port) == 1, 'Expected one %s port named %s.', blockType, name);
+	index = str2double(get_param(port{1}, 'Port'));
 end
 
 function verifyHeldState(testCase, out, fixture, prior, first)

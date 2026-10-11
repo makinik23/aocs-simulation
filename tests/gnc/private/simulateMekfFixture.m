@@ -55,20 +55,20 @@ function s = simulateMekfFixture(f)
 	statusFields={'Gyro.new_data','Gyro.overrun','Magnetometer.new_data','CoarseSunSensors.new_data'};
 	statusData={get(f,'fresh',true(n,1)),get(f,'overrun',false(n,1)), ...
 		get(f,'magFresh',true(n,1)),get(f,'sunFresh',true(n,1))};
-	refFields={'B_I_T','sun_I_unit','valid','sgp4_update_time_s'};
+	refFields={'B_I_T','sun_I_unit','valid','orbit_update_time_s'};
 	refData={get(f,'magI',zeros(n,3)),get(f,'sunI',zeros(n,3)), ...
 		get(f,'refValid',true(n,1)),get(f,'refTime',f.t)};
 	sampleBus(m,ws,'Report Samples','Reports',report,reportFields,reportData,f.t);
 	sampleBus(m,ws,'Status Samples','Status',status,statusFields,statusData,f.t);
 	sampleBus(m,ws,'Reference Samples','References',reference,refFields,refData,f.t);
 
-	add_line(m,triadSource,'Estimator/1');
-	add_line(m,'Reference Samples/1','Estimator/2');
-	add_line(m,'Report Samples/1','Estimator/3');
-	add_line(m,'Status Samples/1','Estimator/4');
+	add_line(m,triadSource,['Estimator/' num2str(namedPort(e,'Inport','AttitudeInitialization'))]);
+	add_line(m,'Reference Samples/1',['Estimator/' num2str(namedPort(e,'Inport','ReferenceVectors'))]);
+	add_line(m,'Report Samples/1',['Estimator/' num2str(namedPort(e,'Inport','SensorReports'))]);
+	add_line(m,'Status Samples/1',['Estimator/' num2str(namedPort(e,'Inport','SensorReadStatus'))]);
 	add_block('simulink/Signal Routing/Bus Selector',[m '/Observe'], ...
 		'OutputSignals','q_BI,P_error,omega_BI_B_rad_s,gyro_bias_B_rad_s,valid,update_time_s');
-	add_line(m,'Estimator/1','Observe/1');
+	add_line(m,['Estimator/' num2str(namedPort(e,'Outport','AttitudeEstimate'))],'Observe/1');
 
 	names={'q','P','rate','bias','valid','time'};
 	for k=1:numel(names), sink(m,names{k},['Observe/' num2str(k)]); end
@@ -76,15 +76,15 @@ function s = simulateMekfFixture(f)
 	add_block('simulink/Signal Routing/Bus Selector',[m '/Observe Health'], ...
 		'OutputSignals', ['mode_id,control_usable,attitude_std_max_rad,' ...
 		'state_age_s,correction_age_s,vector_update_accepted']);
-	add_line(m,'Estimator/2','Observe Health/1');
+	add_line(m,['Estimator/' num2str(namedPort(e,'Outport','AttitudeHealth'))],'Observe Health/1');
 
 	healthNames={'healthMode','controlUsable','attitudeStd','stateAge', ...
 		'correctionAge','vectorAccepted'};
 	for k=1:numel(healthNames), sink(m,healthNames{k},['Observe Health/' num2str(k)]); end
-	sink(e,'magAccepted','Magnetometer Update/2');
-	sink(e,'magNIS','Magnetometer Update/3');
-	sink(e,'sunAccepted','Sun Vector Update/2');
-	sink(e,'sunNIS','Sun Vector Update/3');
+	sink(e,'magAccepted','Diagnostics/3');
+	sink(e,'magNIS','Diagnostics/5');
+	sink(e,'sunAccepted','Diagnostics/4');
+	sink(e,'sunNIS','Diagnostics/6');
 	cfg=evalin('base','AOCS_GNCConfig');
 	payload=cfg.Value;
 	payload.MEKF.initial_bias_B_rad_s=f.bias;
@@ -180,6 +180,13 @@ function sampleBus(m,ws,name,source,payload,fields,data,t)
 		end
 		sample(m,ws,[source num2str(k)],t,data{k},[name '/' num2str(k+1)],type);
 	end
+end
+
+function index=namedPort(subsystem,blockType,name)
+	% Resolve a copied subsystem port by its interface name.
+	port=find_system(subsystem,'SearchDepth',1,'BlockType',blockType,'Name',name);
+	assert(numel(port)==1,'Expected one %s port named %s.',blockType,name);
+	index=str2double(get_param(port{1},'Port'));
 end
 
 function sample(m,ws,name,t,data,destination,type)

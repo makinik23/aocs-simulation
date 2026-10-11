@@ -1,6 +1,6 @@
 classdef MekfPropagationTest < matlab.unittest.TestCase
 	% Description:
-	%   Regression tests for block-only gyro prediction with updates disabled.
+	%   Verifies MEKF gyro prediction with vector updates disabled.
 
 	methods (TestClassSetup)
 		function prepareEnvironment(~)

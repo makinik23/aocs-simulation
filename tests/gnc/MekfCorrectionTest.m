@@ -1,6 +1,6 @@
 classdef MekfCorrectionTest < matlab.unittest.TestCase
 	% Description:
-	%   Verifies saved native-block MEKF corrections and deterministic convergence.
+	%   Verifies MEKF corrections and deterministic convergence.
 
 	methods (TestClassSetup)
 		function prepareEnvironment(~)

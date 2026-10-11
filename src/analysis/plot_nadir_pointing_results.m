@@ -1,6 +1,5 @@
 function report = plot_nadir_pointing_results(out,AOCS,options)
-%PLOT_NADIR_POINTING_RESULTS True/estimated tracking of the onboard LVLH.
-% This measures tracking of the onboard SGP4 reference, not orbit accuracy.
+%PLOT_NADIR_POINTING_RESULTS Measure pointing errors against the navigation LVLH.
 arguments
     out
     AOCS struct
@@ -19,7 +18,13 @@ qTrue = qTrue./vecnorm(qTrue,2,2);
 qEst = qEst./vecnorm(qEst,2,2);
 angleTrue = 2*acosd(min(1,abs(sum(qTrue.*qRef,2))));
 angleEst = 2*acosd(min(1,abs(sum(qEst.*qRef,2))));
+reference = logs.get('ReferenceVectors').Values;
+referenceValid = resample(reference.valid,1,t,'previous') > 0.5;
+angleTrue(~referenceValid) = NaN;
+angleEst(~referenceValid) = NaN;
 estimationError = 2*acosd(min(1,abs(sum(qEst.*qTrue,2))));
+estimateValid = resample(estimate.valid,1,t,'previous') > 0.5;
+estimationError(~estimateValid) = NaN;
 omegaTrue = resample(logs.get('omega_b').Values,3,t,'linear');
 omegaRef = resample(logs.get('omega_ref_DI_D_rad_s').Values,3,t,'previous');
 rateError = zeros(numel(t),3);
@@ -27,11 +32,14 @@ for k=1:numel(t)
     C_BD = quat2dcm(qTrue(k,:))*quat2dcm(qRef(k,:))';
     rateError(k,:) = omegaTrue(k,:) - (C_BD*omegaRef(k,:)')';
 end
+rateError(~referenceValid,:) = NaN;
 torque = logs.get('tau_control_B_Nm').Values;
-active = logs.get('control_active').Values;
 useIntegral = isfield(AOCS.Control,'UseIntegral') && AOCS.Control.UseIntegral;
 controllerName = 'PD';
 if useIntegral, controllerName = 'PID'; end
+activeName = 'control_active';
+if useIntegral, activeName = 'pid_control_active'; end
+active = logs.get(activeName).Values;
 demandName = 'tau_demand_B_Nm';
 if useIntegral, demandName = 'tau_pid_demand_B_Nm'; end
 demand = logs.get(demandName).Values;
@@ -43,11 +51,25 @@ if any(activeAtDemand)
 else
     saturationFraction = 0;
 end
-tail = t >= max(t(1),t(end)-60);
-report = struct('InitialError_deg',angleTrue(1), ...
+tail = t >= max(t(1),t(end)-60) & referenceValid;
+initialError = NaN;
+firstReferenceTime = NaN;
+tailMaximum = NaN;
+tailRms = NaN;
+if any(referenceValid)
+    firstValid = find(referenceValid,1);
+    initialError = angleTrue(firstValid);
+    firstReferenceTime = t(firstValid);
+end
+if any(tail)
+    tailMaximum = max(angleTrue(tail));
+    tailRms = sqrt(mean(angleTrue(tail).^2));
+end
+report = struct('InitialError_deg',initialError, ...
+    'FirstReferenceTime_s',firstReferenceTime, ...
     'FinalError_deg',angleTrue(end), ...
-    'TailMaxError_deg',max(angleTrue(tail)), ...
-    'TailRmsError_deg',sqrt(mean(angleTrue(tail).^2)), ...
+    'TailMaxError_deg',tailMaximum, ...
+    'TailRmsError_deg',tailRms, ...
     'FinalEstimationError_deg',estimationError(end), ...
     'FinalRateError_deg_s',rad2deg(norm(rateError(end,:))), ...
     'TailTrueRateRms_deg_s',rad2deg(sqrt(mean(sum(rateError(tail,:).^2,2)))), ...
@@ -56,7 +78,8 @@ report = struct('InitialError_deg',angleTrue(1), ...
     'SaturationFraction',saturationFraction, ...
     'Controller',controllerName, ...
     'ControlActiveFraction',mean(double(active.Data(:))), ...
-    'Time_s',t,'TrueError_deg',angleTrue,'EstimatedError_deg',angleEst, ...
+    'Time_s',t,'ReferenceValid',referenceValid, ...
+    'TrueError_deg',angleTrue,'EstimatedError_deg',angleEst, ...
     'EstimationError_deg',estimationError);
 fprintf('LVLH error: %.3f -> %.3f deg; last 60 s max %.3f deg, RMS %.3f deg.\n', ...
     report.InitialError_deg,report.FinalError_deg,report.TailMaxError_deg,report.TailRmsError_deg);

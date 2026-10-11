@@ -25,7 +25,7 @@ classdef MekfPlantIntegrationTest < matlab.unittest.TestCase
 			qTrue=interp1(truth.Time(:),truth.Data,time,'linear');
 			qTrue=qTrue./vecnorm(qTrue,2,2);
 			errorDeg=2*acosd(min(1,abs(sum(q.*qTrue,2))));
-			settled=time>=10 & time<=50;
+			settled=time>=AOCS.Sensors.GNSS.AcquisitionTime_s+10 & time<=50;
 
 			testCase.verifyTrue(all(estimate.initialized.Data(settled)));
 			testCase.verifyLessThan(max(errorDeg(settled)),0.8);

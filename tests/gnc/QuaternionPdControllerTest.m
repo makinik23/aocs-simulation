@@ -97,10 +97,15 @@ classdef QuaternionPdControllerTest < matlab.unittest.TestCase
 
 			set_param(h,'Solver','FixedStepDiscrete','FixedStep','0.1','StopTime','2');
 			add_block([char(aocs.Model.Name) '/GNC/Attitude Control'],[h '/Control']);
+			plantWorkspace=get_param(char(aocs.Model.Name),'ModelWorkspace');
+			observerCfg=getVariable(plantWorkspace,'ObserverCfg');
+			observerCfg.Enabled=false;
 			add_block('simulink/Ports & Subsystems/Function-Call Generator',[h '/Tick'],'sample_time','0.1');
 			add_line(h,'Tick/1','Control/Trigger');
 
 			names={'health','estimate','reference','qref','wref','aref'};
+			inputNames={'AttitudeHealth','AttitudeEstimate','ReferenceVectors', ...
+				'QuaternionReference','OmegaReference','AlphaReference'};
 			busTypes={'AttitudeHealthBus','AttitudeEstimateBus','ReferenceVectorBus'};
 			for k=1:numel(names)
 				block=[h '/' names{k}];
@@ -109,7 +114,8 @@ classdef QuaternionPdControllerTest < matlab.unittest.TestCase
 
 				if k<=3, set_param(block,'OutDataTypeStr',['Bus: ' busTypes{k}]); end
 
-				add_line(h,[names{k} '/1'],sprintf('Control/%d',k));
+				port=get_param([h '/Control/' inputNames{k}],'Port');
+				add_line(h,[names{k} '/1'],['Control/' port]);
 			end
 			add_block('simulink/Sinks/To Workspace',[h '/Torque'], ...
 				'VariableName','tau','SaveFormat','Timeseries');
@@ -134,6 +140,7 @@ classdef QuaternionPdControllerTest < matlab.unittest.TestCase
 				variables.AOCS=aocs;
 				fields=fieldnames(variables);
 				for j=1:numel(fields), input=input.setVariable(fields{j},variables.(fields{j})); end
+				input=input.setVariable('ObserverCfg',observerCfg);
 				values={health,estimate,reference,[1;0;0;0],zeros(3,1),zeros(3,1)};
 				for j=1:numel(names), input=input.setVariable(names{j},values{j}); end
 
@@ -187,9 +194,13 @@ classdef QuaternionPdControllerTest < matlab.unittest.TestCase
 			add_block('simulink/Math Operations/Sum',[p '/Residual'],'Inputs','+-');
 			add_block('simulink/Sinks/To Workspace',[p '/State'],'VariableName','xi','SaveFormat','Timeseries');
 
-			lines={'Error/1','I/1';'Disable/1','Active/1';'Reenable/1','Active/2'; ...
-				'Active/1','I/2';'I/1','Torque/1';'Torque/1','Limit/1'; ...
-				'Limit/1','Residual/1';'Torque/1','Residual/2';'Residual/1','I/3';'I/1','State/1'};
+			errorPort=get_param([p '/I/Attitude Error'],'Port');
+			activePort=get_param([p '/I/Active'],'Port');
+			residualPort=get_param([p '/I/Saturation Residual'],'Port');
+			lines={'Error/1',['I/' errorPort];'Disable/1','Active/1';'Reenable/1','Active/2'; ...
+				'Active/1',['I/' activePort];'I/1','Torque/1';'Torque/1','Limit/1'; ...
+				'Limit/1','Residual/1';'Torque/1','Residual/2'; ...
+				'Residual/1',['I/' residualPort];'I/1','State/1'};
 			for k=1:size(lines,1), add_line(p,lines{k,1},lines{k,2}); end
 			input=Simulink.SimulationInput(h);
 			fields=fieldnames(variables);

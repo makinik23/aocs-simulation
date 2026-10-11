@@ -1,0 +1,6 @@
+function cfg = defaultDisturbanceObserverConfig
+%DEFAULTDISTURBANCEOBSERVERCONFIG Create the torque EKF configuration.
+	cfg = struct('Enabled',true, ...
+		'TorqueRW_Nm2_s',1e-16,'RateSigma_rad_s',deg2rad(0.02), ...
+		'InitialTorqueSigma_Nm',2e-6,'NISLimit',25,'MaxEstimate_Nm',5e-6);
+end

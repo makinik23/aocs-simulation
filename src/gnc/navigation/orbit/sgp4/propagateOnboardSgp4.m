@@ -1,14 +1,5 @@
 function state = propagateOnboardSgp4(input)
-% Description:
-%   Propagates the configured onboard orbit with Aerospace Toolbox SGP4.
-%
-% Arguments:
-%   input - Nine-element vector containing elapsed time [s], UTC epoch
-%           Julian date, Keplerian epoch elements [m, 1, deg, deg, deg,
-%           deg], and the SGP4 B-star term.
-%
-% Outputs:
-%   state - Seven-element vector [r_I_m; v_I_m_s; valid].
+%PROPAGATEONBOARDSGP4 Propagate the onboard orbit using SGP4.
 
 arguments
     input (9, 1) double

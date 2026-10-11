@@ -109,11 +109,11 @@ function report=runPlantTrials(options)
 
 	setupAocsPaths([],true);
 
-	assert(options.Duration_s>10,'AOCS:MonteCarlo:Duration', ...
-		'Duration_s must exceed the 10 s settling interval.');
-
 	[baseInput,AOCS]=createAocsSimulationInput();
 	cleanup=onCleanup(@() close_system(AOCS.Model.Name,0));
+	evaluationStart_s=AOCS.Sensors.GNSS.AcquisitionTime_s+10;
+	assert(options.Duration_s>evaluationStart_s,'AOCS:MonteCarlo:Duration', ...
+		'Duration_s must exceed GNSS acquisition and the 10 s settling interval.');
 	variables=baseInput.Variables;
 	sensor=variables(strcmp({variables.Name},'AOCS_SensorConfig')).Value;
 	gnc=variables(strcmp({variables.Name},'AOCS_GNCConfig')).Value;
@@ -154,7 +154,7 @@ function report=runPlantTrials(options)
 		bias=reshape(estimate.gyro_bias_B_rad_s.Data,3,[])';
 		biasTruth=interp1(trueBias.Time(:), ...
 			loggedSignalMatrix(trueBias.Data,3,'GyroTrueBias'),time,'linear');
-		settled=time>=10;
+		settled=time>=evaluationStart_s;
 		usable=logical(health.control_usable.Data(:));
 		trials(k).Seed=seed;
 		trials(k).AttitudeP95_deg=percentile(angle(settled),95);
@@ -169,7 +169,8 @@ function report=runPlantTrials(options)
 
 	report=struct('Scope',"plant",'Seeds',options.Seeds, ...
 		'Duration_s',options.Duration_s, ...
-		'SettlingTime_s',10,'FalseSafeThreshold_deg',5, ...
+		'SettlingTime_s',10,'EvaluationStartTime_s',evaluationStart_s, ...
+		'FalseSafeThreshold_deg',5, ...
 		'Trials',trials,'SensorSeedFormula',"30000+10*seed+[1..5]", ...
 		'BaselineSensorConfig',sensor.Value,'GNCConfig',gnc.Value);
 

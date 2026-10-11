@@ -39,6 +39,7 @@ species_rho_kg_m3 = number_densities_m3 .* species_mass_kg;
 % Preserve the total density returned by DTM2020 despite roundoff in the
 % partial densities exposed by the reference Fortran implementation.
 partial_rho_sum = sum(species_rho_kg_m3);
+
 if partial_rho_sum <= 0.0
     species_rho_kg_m3(1) = rho_kg_m3;
 else

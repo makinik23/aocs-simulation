@@ -1,8 +1,6 @@
 function [out, AOCS, runDirectory, report] = run_nadir_pointing_demo(options)
-%RUN_NADIR_POINTING_DEMO Closed-loop acquisition from a specified LVLH error.
-% Uses the complete plant, sensors, drivers, TRIAD and MEKF.
+%RUN_NADIR_POINTING_DEMO Nadir pointing for a given reference quaternion.
 % Example: run_nadir_pointing_demo(InitialError_deg=90, StopTime_s=600)
-% Controller="PID" selects the copied PD with integral feedback and anti-windup.
 arguments
     options.InitialError_deg (1,1) double {mustBeFinite,mustBeNonnegative} = 90
     options.StopTime_s (1,1) double {mustBeFinite,mustBePositive} = 600
@@ -20,16 +18,22 @@ root = setupAocsPaths();
 
 base = loadAocsSimulationConfig(fullfile(root,'config','scenarios', ...
     'nadir_pointing.json'), root);
-s = base.GNCConfig.AttitudeInitialization;
+if base.Orbit.InitialState.Type == "cartesian"
+    r = base.Orbit.InitialCartesian.position_I_m;
+    v = base.Orbit.InitialCartesian.velocity_I_m_s;
+else
+    kepler = base.Orbit.InitialKeplerian;
+    epochJd = base.GNCConfig.AttitudeInitialization.epoch_utc_jd;
+    [r, v] = propagateOrbit(epochJd, kepler.semi_major_axis_m, ...
+        kepler.eccentricity, rad2deg(kepler.inclination_rad), rad2deg(kepler.raan_rad), ...
+        rad2deg(kepler.argument_of_periapsis_rad), rad2deg(kepler.true_anomaly_rad), ...
+        Epoch=epochJd, PropModel="two-body-keplerian", ...
+        OutputCoordinateFrame="inertial");
+    r = reshape(r, 3, 1);
+    v = reshape(v, 3, 1);
+end
 
-orbit = propagateOnboardSgp4([0; s.epoch_utc_jd; ...
-    s.sgp4_semi_major_axis_m; s.sgp4_eccentricity; ...
-    s.sgp4_inclination_deg; s.sgp4_raan_deg; ...
-    s.sgp4_argument_of_periapsis_deg; s.sgp4_true_anomaly_deg; s.sgp4_bstar]);
-
-assert(orbit(7) == 1, 'Initial onboard SGP4 propagation failed.');
-
-r = orbit(1:3); v = orbit(4:6); h = cross(r,v);
+h = cross(r,v);
 z = -r/norm(r); y = -h/norm(h); x = cross(y,z);
 
 qRef = dcm2quat([x';y';z']);
@@ -82,7 +86,7 @@ end
 
 % The archived configuration contains the complete resolved experiment.
 configFile = [tempname '.json'];
-cleanup = onCleanup(@() delete(configFile)); %#ok<NASGU>
+cleanup = onCleanup(@() delete(configFile));
 
 writeAocsJson(configFile,raw);
 

@@ -1,6 +1,6 @@
 classdef AttitudeHealthTest < matlab.unittest.TestCase
 	% Description:
-	%   Exercises the saved block-based MEKF health monitor and its contracts.
+	%   Verifies MEKF health classification and interfaces.
 
 	methods (TestClassSetup)
 		function prepareEnvironment(~)

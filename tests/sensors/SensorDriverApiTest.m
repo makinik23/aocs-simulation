@@ -329,25 +329,43 @@ function out = SimulateChain(gncPeriod, sensorPeriods)
 			add_line(model, [entry{1} '/' num2str(port)], [name '/1']);
 		end
 	end
-	% Only the ephemeris/reference branch is replaced; the GNC scheduler,
-	% consumers and driver functions are the saved production blocks.
+	% Keep production sensor access, TRIAD and MEKF while replacing guidance branches.
 	gnc = [model '/GNC'];
 	reference = [gnc '/Onboard Reference Vectors'];
-	delete_line(gnc, 'Select Initialization Config/1', 'Onboard Reference Vectors/1');
-	ports = get_param(reference, 'PortHandles');
-	delete_line(get_param(ports.Outport, 'Line'));
+	triadPorts = get_param([gnc '/TRIAD Initialization'], 'PortHandles');
+	triadReferencePort = str2double(get_param([gnc '/TRIAD Initialization/ReferenceVectors'], 'Port'));
+	referenceLine = get_param(triadPorts.Inport(triadReferencePort), 'Line');
+	if referenceLine ~= -1
+		delete_line(referenceLine);
+	end
+	estimatorPorts = get_param([gnc '/State Estimation (MEKF)'], 'PortHandles');
+	estimatorReferencePort = str2double(get_param([gnc '/State Estimation (MEKF)/ReferenceVectors'], 'Port'));
+	referenceLine = get_param(estimatorPorts.Inport(estimatorReferencePort), 'Line');
+	if referenceLine ~= -1
+		delete_line(referenceLine);
+	end
 	delete_block(reference);
+	delete_block([gnc '/Guidance']);
+	delete_block([gnc '/Attitude Control']);
+	torquePort = get_param([gnc '/ControlTorque_B_Nm'], 'PortHandles');
+	torqueLine = get_param(torquePort.Inport, 'Line');
+	if torqueLine ~= -1
+		delete_line(torqueLine);
+	end
+	add_block('simulink/Sources/Constant', [gnc '/Zero Control Torque'], ...
+		'Value', 'zeros(3,1)');
+	add_line(gnc, 'Zero Control Torque/1', 'ControlTorque_B_Nm/1');
 	referenceState = Simulink.Bus.createMATLABStruct('ReferenceVectorBus');
 	referenceState.sun_I_unit = [1;0;0];
 	referenceState.B_I_T = [1e-5;2e-5;3e-5];
 	referenceState.valid = 1;
-	referenceState.sgp4_sequence_id = uint32(1);
+	referenceState.orbit_solution_id = uint32(1);
 	assignin(get_param(model, 'ModelWorkspace'), 'referenceFixture', referenceState);
 
 	add_block('simulink/Sources/Constant', [gnc '/Reference Fixture'], ...
 		'Value', 'referenceFixture', 'OutDataTypeStr', 'Bus: ReferenceVectorBus');
-	add_line(gnc, 'Reference Fixture/1', 'TRIAD Initialization/3');
-	add_line(gnc, 'Reference Fixture/1', 'State Estimation (MEKF)/2');
+	add_line(gnc, 'Reference Fixture/1', ['TRIAD Initialization/' num2str(triadReferencePort)]);
+	add_line(gnc, 'Reference Fixture/1', ['State Estimation (MEKF)/' num2str(estimatorReferencePort)]);
 
 	triad = [gnc '/TRIAD Initialization'];
 
