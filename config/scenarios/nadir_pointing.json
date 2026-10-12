@@ -1,0 +1,29 @@
+{
+  "extends": "../AocsSimulationConfig.json",
+  "mission": {
+    "name": "quaternion_pd_nadir_pointing",
+    "description": "Quaternion PD, MEKF feedback and saturated ideal body torque; run_nadir_pointing_demo sets a controlled initial LVLH error"
+  },
+  "simulation": {
+    "stop_time_s": 600
+  },
+  "results": {
+    "file": "aocs_nadir_pointing.mat"
+  },
+  "gnc": {
+    "attitude_initialization": {
+      "sgp4_sample_time_s": 0.1
+    },
+    "attitude_control": {
+      "enabled": true,
+      "use_integral": false,
+      "kp_s2": 0.0004,
+      "kd_s": 0.04,
+      "pid_kp_s2": 0.0039239999999999995,
+      "pid_kd_s": 0.14625,
+      "ki_s3": 8.0999999999999987E-6,
+      "anti_windup_time_s": 150,
+      "max_torque_Nm": 2E-5
+    }
+  }
+}

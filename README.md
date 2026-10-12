@@ -55,6 +55,17 @@ Scenario example:
 run_aocs_simulation("config/scenarios/no_disturbance_torques.json")
 ```
 
+Closed-loop nadir acquisition from a 90-degree LVLH attitude error:
+
+```matlab
+setupAocsPaths;
+[out, config, runDirectory, report] = run_nadir_pointing_demo;
+```
+
+This plots true/estimated reference tracking, rate error, applied torque and
+control availability. See [nadir pointing](docs/nadir_pointing.md) for the
+controller blocks, gains, assumptions and replay commands.
+
 Generated files and reports remain local in `build/`, `results/` and
 `test-results/`. See [getting started](docs/getting_started.md) for native
 dependencies, platform support and troubleshooting.

@@ -1,0 +1,41 @@
+{
+  "purpose": "Verify the six-state torque EKF on the main AOCS plant, with optional uncompensated PD baseline.",
+  "initial_angle_deg": 5,
+  "initial_axis": [
+    0.5773502691896258,
+    0.5773502691896258,
+    0.5773502691896258
+  ],
+  "initial_rate_error_deg_s": [
+    0,
+    0,
+    0
+  ],
+  "duration_s": 1200,
+  "evaluation_tail_s": 120,
+  "scenarios": [
+    "constant body torque: standalone EKF algorithm test",
+    "environment torques: main-plant run with independent and MEKF rate replays"
+  ],
+  "methods": [
+    "PD baseline (ObserverCfg.Enabled=false)",
+    "PD with torque EKF (ObserverCfg.Enabled=true)"
+  ],
+  "constraints": {
+    "axis_applied_torque_limit_Nm": 2e-05,
+    "observer_estimate_limit_Nm": 5e-06
+  },
+  "selection": "Assess finite output, covariance health, accepted active fraction, applied torque limit, true pointing and torque residual on the same scenario. Offline replays characterize estimator sensitivity, not closed-loop improvement.",
+  "assumptions": [
+    "rigid body, constant nominal inertia",
+    "ideal saturated actuator, no wheel momentum model",
+    "observer input is previous interval applied torque",
+    "MEKF corrected rate covariance approximates temporally correlated errors"
+  ],
+  "implementation_status": "Main-plant Simulink prototype uses an explicit-state EKF adapter; flight code generation and timing are not qualified.",
+  "workflow": [
+    "runtests(\"tests/gnc/TorqueEkfTest.m\")",
+    "run_nadir_pointing_demo",
+    "validateTorqueEkfEnvironment for the simulation archive"
+  ]
+}

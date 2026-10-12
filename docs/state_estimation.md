@@ -5,11 +5,15 @@ The current estimator is a six-error-state multiplicative extended Kalman filter
 and gyroscope bias `b_g` in body axes [rad/s]. Its local error state is
 `[delta_theta_B; delta_b_g]`.
 
+The Simulink MATLAB Function block calls `mekfStep.m` in
+`src/gnc/navigation/attitude_estimation`. Unit Delay owns the estimate, gyro
+sample history and last correction time; `defaultMekfState.m` initializes them.
+
 ## Filter
 
 TRIAD provides the initial attitude when valid magnetometer and coarse Sun sensor
 observations can be paired with onboard inertial reference vectors. Those
-references use an onboard SGP4 orbit prediction. The
+references use the orbital EKF with GNSS corrections and J2 propagation. The
 initial gyro-bias estimate is a configured prior.
 
 At each 0.1 s GNC tick, a fresh, valid gyro report drives prediction using
@@ -35,8 +39,9 @@ in Tracking; it is an onboard validity decision, not proof of truth accuracy.
 ## Monte Carlo regression
 
 `MekfMonteCarloTest` uses seeded trials and keeps truth outside the filter,
-using it only for scoring. Results below come from the local MATLAB R2025a core
-suite; attitude p95 values exclude the first 10 s.
+using it only for scoring. The archived results below describe the earlier block
+implementation, before GNSS integration and this migration; attitude p95 values
+exclude the first 10 s.
 
 | Scope | Trials | Attitude error p95 | Final gyro-bias error |
 |---|---:|---:|---:|

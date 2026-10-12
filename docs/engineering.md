@@ -48,7 +48,7 @@ Advisor MAB check set.
 | Clear hierarchy and left-to-right flow | Top-level four-layer architecture; hand-controlled layout in `styleAocsModel`, exported diagrams reviewed visually |
 | Readable block names and diagrams | Meaningful subsystem/port names, black on white, no illegible subsystem previews at the reviewed architecture, Sensors and Drivers levels |
 | Orthogonal signal lines | Explicit routing on the architecture and driver diagrams; physics internals are preserved |
-| Explicit unused signals (MAB db_0081) | TRIAD seeds MEKF; the estimate ends in a named Terminator until a controller consumes it; `checkAocsModel` rejects unconnected project-owned data ports |
+| Explicit unused signals (MAB db_0081) | TRIAD seeds MEKF; attitude estimate and health feed control; `checkAocsModel` rejects unconnected project-owned data ports |
 | No accidental dangling wiring | Unconnected input/output/line diagnostics set to `error`; model compilation checks actual wiring |
 | Numerical failures visible | An enabled assertion checks every numeric `PlantStateBus` leaf for finiteness; NaN/Inf injection tests verify failure; integer sequence wrap is intentional |
 | Defined interfaces | Typed buses, explicit SI units/frames in contracts; raw measurements separated from driver metadata |
@@ -69,6 +69,81 @@ project convention: scalar-first inertial-to-body quaternion/DCM; do not infer a
 Earth-fixed attitude frame from those historic field suffixes.
 
 ## Verification and traceability
+
+### Orbital navigation
+
+The MATLAB algorithms live under `src/gnc/navigation/orbit`; attitude
+estimation lives alongside them in `src/gnc/navigation/attitude_estimation`.
+
+The main attitude estimator uses a MATLAB Function block calling `mekfStep.m`.
+Unit Delay owns its estimate, accepted gyro history and last correction time.
+The migration preserves TRIAD initialization, gyro quadrature and coning,
+sequential magnetic and Sun corrections, Joseph covariance and reset, NIS gates
+and health thresholds. The quaternion remains scalar first and maps GCRF to body.
+An invalid innovation covariance rejects the correction instead of stopping the
+simulation in the former Cholesky Solver block.
+
+Migration verification passed 97 MATLAB tests, five comparisons against saved
+block-filter traces, a 35-step MATLAB/MEX comparison and a standalone C check
+compiled with Clang. Evidence is saved in
+`results/validation/mekf_function_migration_2026-10-11`.
+
+`GNC/Orbit Determination & Navigation` executes after Sensor Access at 10 Hz.
+The MATLAB Function block calls `orbitNavigationStep.m`; Unit Delay owns its
+state and covariance. Five fixed bus contracts are defined in
+`createOrbitNavigationBuses.m`, with configuration in `AOCS.NavigationConfig`.
+Navigation supplies one common orbit state to LVLH guidance and the onboard
+magnetic/Sun reference models. `GNC/Guidance` is a separate function-call subsystem
+that consumes NavigationState directly and generates the
+reference quaternion, angular rate and angular acceleration. Its enabled LVLH
+core waits for a valid current navigation solution. Time validity is owned by
+navigation; guidance checks only `valid` and LVLH geometry. The execution order
+is Sensor Access, Navigation, Reference Vectors, TRIAD, MEKF, Guidance, Control.
+The SGP4 reference path is removed from the operational loop.
+Guidance restoration passed 31 architecture, sensor and PD/PID integration
+tests; evidence is in `results/validation/guidance_restoration_2026-10-11`.
+
+The six-state EKF uses GCRF position and velocity in SI units. A valid first GNSS
+fix initializes state and covariance. Prediction uses central gravity and J2,
+with RK4 integration of both state and transition matrix. Each navigation step
+accepts at most 1 s of propagation; longer scheduling gaps preserve the old
+state and report an invalid current solution. Process noise uses the short-step
+white acceleration model. The Earth axis is held at its initial epoch direction.
+GNSS covariance includes white noise and stationary Gauss Markov variance;
+ionospheric and periodic biases are not explicitly estimated.
+
+GNSS updates use identity measurement Jacobian and Joseph covariance correction.
+NIS is computed from the prior innovation and logged as a diagnostic. It does
+not gate correction, including when its scalar calculation overflows. Finite
+state, valid orbital geometry, positive definite covariance and valid innovation
+factorization remain numerical requirements. Reset has priority over a new fix;
+duplicate, stale and future fixes cannot be reused for correction.
+
+`navigation.valid` denotes a numerically valid state at the execution time, not
+qualification against a mission accuracy budget. Health modes are 0 waiting,
+1 GNSS updated, 2 coasting and 3 invalid; state sources are 0 unavailable,
+1 GNSS and 2 prediction. `solution_id` advances once per committed state update
+and wraps as uint32. `algorithm_ready` reports that the EKF step is implemented.
+NIS is unavailable on steps without an eligible correction.
+
+Before the first valid GNSS fix, environment reference calculations and LVLH
+are disabled. The initial desired quaternion is identity and rates/accelerations
+are zero; reference validity prevents controller torque. LVLH derivative memory
+resets on re-enable and uses the 0.1 s GNC period rather than the old SGP4 period.
+Its rate model remains the locally planar orbit approximation; acceleration is
+the backward difference of that rate, not the exact perturbed-frame derivative.
+Reference metadata is `orbit_update_time_s` and `orbit_solution_id`; TRIAD records
+the orbit solution identifier consumed by its vector pair. Reference bus element
+names come from their declared schemas.
+
+The temporary interface uses `receive_time_s` as measurement epoch under zero
+transport latency. Delayed measurement handling and the flight software state
+machine remain separate integration work. Logs `OrbitNavigationStateLog`,
+`OrbitNavigationHealthLog` and `OrbitNavigationBufferLog` expose the execution.
+`OrbitNavigationTest` checks initialization, prediction, correction, diagnostic
+NIS, reset, timing and numerical failures. `OrbitNavigationIntegrationTest`
+checks PD/PID startup, shared orbit metadata, LVLH quaternion/rate geometry and first-sample acceleration
+in the full plant; it belongs to the FullPlant test profile.
 
 `run_aocs_tests("core")` needs no native compiler or downloaded DTM source.
 `run_aocs_tests("full")` runs every suite after explicit native bootstrap.

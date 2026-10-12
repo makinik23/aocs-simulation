@@ -18,6 +18,7 @@ codegen/
 *.sldd.autosave
 data/*.sldd
 
+docs/data/
 results/
 **/results/
 test-results/
@@ -50,3 +51,6 @@ results/basilisk/
 export_basilisk_visualization.m
 src/analysis/exportBasiliskDataFile.m
 tools/visualization/create_vizard_message_file.py
+
+# Local editable controller notes (published PDF lives in docs)
+/local_notes/

@@ -12,6 +12,7 @@ createOrbitStateBus("base");
 createReferenceVectorBus("base");
 createAttitudeInitializationBus("base");
 createAttitudeEstimateBus("base");
+createMekfBuses("base");
 createAttitudeHealthBus("base");
 createEnvironmentContextBus("base");
 createAtmosphereBus("base");
@@ -34,5 +35,7 @@ createGnssMeasurementBus("base");
 createSensorMeasurementBus("base");
 createSensorReportBus("base");
 createSensorReadStatusBus("base");
+createOrbitReferenceBus("base");
+createOrbitNavigationBuses("base");
 
 end
